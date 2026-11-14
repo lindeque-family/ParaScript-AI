@@ -6,7 +6,7 @@ export type Type =
     | TypeVariable
     | PrimitiveType
     | ComponentType
-    | DomainType
+    | SeatedSolid3DType
     | ArrayType
     | FunctionType;
 
@@ -17,19 +17,18 @@ export interface TypeVariable {
 }
 
 export interface PrimitiveType {
-    readonly tag: "Float" | "String" | "Vector" | "Curve1D" | "Surface2D" | "Solid3D" | "Axis" | "Meet" | "ConstraintSet";
+    readonly tag: "Float" | "String" | "Vector" | "Curve1D" | "Surface2D" | "Solid3D" | "Meet" | "ConstraintSet";
 }
 
-/** A component publishes the anchors in its expose block. Join results carry none. */
+/** A component publishes the anchors in its expose block. A join is a solid and carries none. */
 export interface ComponentType {
     readonly tag: "Component";
     readonly anchors: readonly string[];
 }
 
-/** Solids that belong to one join. Operators on two domains require the same id. */
-export interface DomainType {
-    readonly tag: "Domain";
-    readonly id: number;
+/** The two solids inside `combine`. `+` and `-` are defined only for this type. */
+export interface SeatedSolid3DType {
+    readonly tag: "SeatedSolid3D";
 }
 
 export interface ArrayType {
@@ -79,7 +78,7 @@ export const tComponent: ComponentType = { tag: "Component", anchors: [] };
 export const tCurve1D: PrimitiveType = { tag: "Curve1D" };
 export const tSurface2D: PrimitiveType = { tag: "Surface2D" };
 export const tSolid3D: PrimitiveType = { tag: "Solid3D" };
-export const tAxis: PrimitiveType = { tag: "Axis" };
+export const tSeatedSolid3D: SeatedSolid3DType = { tag: "SeatedSolid3D" };
 export const tMeet: PrimitiveType = { tag: "Meet" };
 export const tConstraintSet: PrimitiveType = { tag: "ConstraintSet" };
 

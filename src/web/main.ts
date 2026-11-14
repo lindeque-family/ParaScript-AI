@@ -1,6 +1,6 @@
-const { compileParaScriptSource } = await import(new URL("../parascript/compile.js?v=18", import.meta.url).href) as typeof import("../parascript/compile.js");
-const { evaluateModelModule, modelAnchor, modelMesh, offsetMesh, tessellateFaces } = await import(new URL("./model.js?v=18", import.meta.url).href) as typeof import("./model.js");
-const { ManifoldViewport } = await import(new URL("./render.js?v=18", import.meta.url).href) as typeof import("./render.js");
+const { compileParaScriptSource } = await import(new URL("../parascript/compile.js?v=20", import.meta.url).href) as typeof import("../parascript/compile.js");
+const { evaluateModelModule, modelAnchor, modelMesh, offsetMesh, tessellateFaces } = await import(new URL("./model.js?v=20", import.meta.url).href) as typeof import("./model.js");
+const { ManifoldViewport } = await import(new URL("./render.js?v=20", import.meta.url).href) as typeof import("./render.js");
 
 function requireElement<T extends Element>(id: string, ctor: new () => T): T {
     const element = document.getElementById(id);

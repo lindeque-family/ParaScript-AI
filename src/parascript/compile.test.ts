@@ -5,13 +5,13 @@ import { compileParaScriptSource } from "./compile.js";
 test("compilation reports which axis is up", () => {
     const source = (up: string) => `
         setup { units: "mm", coordinate_system: "${up}" }
-        component Mark() {
-            Solid3D(faces: [
-                Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
-            ])
-            expose {}
-        }
-        export(Mark())
+        def Mark = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
+            ]),
+            expose: {}
+        )
+        export(Mark)
     `;
     const yUp = compileParaScriptSource(source("Y-up"));
     assert.equal(yUp.success, true, yUp.errorMessage ?? "");

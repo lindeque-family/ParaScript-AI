@@ -9,6 +9,7 @@ export interface Vector3 {
 export interface SurfaceFace {
     readonly tag: "Surface2D";
     readonly maxU: number;
+    readonly minV: number | ((u: number) => number);
     readonly maxV: number | ((u: number) => number);
     readonly formula: (u: number) => (v: number) => Vector3;
 }
@@ -26,6 +27,7 @@ function isSurfaceFace(value: unknown): value is SurfaceFace {
     if (!isRecord(value)) return false;
     return value.tag === "Surface2D"
         && typeof value.maxU === "number"
+        && (typeof value.minV === "number" || typeof value.minV === "function")
         && (typeof value.maxV === "number" || typeof value.maxV === "function")
         && typeof value.formula === "function";
 }
@@ -61,9 +63,10 @@ export function tessellateFaces(faces: readonly SurfaceFace[], steps = DEFAULT_T
     for (const face of faces) {
         for (let i = 0; i <= steps; i++) {
             const u = (i / steps) * face.maxU;
+            const minV = typeof face.minV === "function" ? face.minV(u) : face.minV;
             const maxV = typeof face.maxV === "function" ? face.maxV(u) : face.maxV;
             for (let j = 0; j <= steps; j++) {
-                const v = (j / steps) * maxV;
+                const v = minV + (j / steps) * (maxV - minV);
                 const point = face.formula(u)(v);
                 const offset = (vertexBase + i * stride + j) * 3;
                 positions[offset] = point.x;
@@ -134,7 +137,7 @@ export function modelMesh(value: unknown, booleanSteps = BOOLEAN_TESSELLATION_ST
     return tessellateFaces(faces, tessellationStepsFor(faces.length));
 }
 
-// A join domain combines its two solids as wholes: union for +, one subtraction for -.
+// combine returns a SeatedSolid3D: union for +, one subtraction for -.
 function solidPolygons(value: unknown, steps: number): ReturnType<typeof subtractPolygons> {
     const model = partGeometry(value);
     if (isBooleanNode(model, "add")) {

@@ -10,6 +10,7 @@ function face(maxU = 1): SurfaceFace {
     return {
         tag: "Surface2D",
         maxU,
+        minV: 0,
         maxV: 1,
         formula: (u: number) => (v: number) => ({ x: u, y: v, z: 0 })
     };
@@ -35,6 +36,7 @@ test("tessellateFaces samples maxV at each u", () => {
     const surface: SurfaceFace = {
         tag: "Surface2D",
         maxU: 2,
+        minV: 0,
         maxV: (u: number) => u,
         formula: (u: number) => (v: number) => ({ x: u, y: v, z: 0 })
     };
@@ -42,35 +44,51 @@ test("tessellateFaces samples maxV at each u", () => {
     assert.deepEqual(Array.from(mesh.positions), [0, 0, 0, 0, 0, 0, 2, 0, 0, 2, 2, 0]);
 });
 
+test("tessellateFaces samples from minV to maxV", () => {
+    const surface: SurfaceFace = {
+        tag: "Surface2D",
+        maxU: 2,
+        minV: (u: number) => 1,
+        maxV: (u: number) => 1 + u,
+        formula: (u: number) => (v: number) => ({ x: u, y: v, z: 0 })
+    };
+    const mesh = tessellateFaces([surface], 1);
+    assert.deepEqual(Array.from(mesh.positions), [0, 1, 0, 0, 1, 0, 2, 1, 0, 2, 3, 0]);
+});
+
 test("tessellationStepsFor keeps multi-face models interactive", () => {
     assert.equal(tessellationStepsFor(1), 40);
     assert.ok(tessellationStepsFor(16) >= 16);
 });
 
-test("Block() - Hole() cuts a through-hole", async () => {
+test("Block - Hole cuts a through-hole", async () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
         def pi = 3.14159265359
-        component Block() {
-            def size = 40.0
-            def height = 10.0
-            Solid3D(faces: [
-                Surface2D(max_u: size, max_v: u => size, formula: u => v => Vector(x: u, y: v, z: 0.0)),
-                Surface2D(max_u: size, max_v: u => size, formula: u => v => Vector(x: u, y: v, z: height)),
-                Surface2D(max_u: size, max_v: u => height, formula: u => v => Vector(x: u, y: 0.0, z: v)),
-                Surface2D(max_u: size, max_v: u => height, formula: u => v => Vector(x: u, y: size, z: v)),
-                Surface2D(max_u: size, max_v: u => height, formula: u => v => Vector(x: 0.0, y: u, z: v)),
-                Surface2D(max_u: size, max_v: u => height, formula: u => v => Vector(x: size, y: u, z: v))
-            ])
-            expose {}
-        }
-        component Hole() {
-            def radius = 5.0
-            def height = 12.0
-            Solid3D(faces: [
+        def size = 40.0
+        def height = 10.0
+        def Block = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => size, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => size, formula: u => v => Vector(x: u, y: v, z: height)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u, y: size, z: v)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: size, y: u, z: v))
+            ]),
+            expose: {
+                up: Vector(x: 0.0, y: 0.0, z: 1.0),
+                right: Vector(x: 1.0, y: 0.0, z: 0.0),
+                at: Vector(x: size / 2.0, y: size / 2.0, z: height / 2.0)
+            }
+        )
+        def radius = 5.0
+        def height = 12.0
+        def Hole = Component(
+            solid: Solid3D(faces: [
                 Surface2D(
                     max_u: pi * 2.0,
-                    max_v: u => height,
+                    min_v: u => 0.0, max_v: u => height,
                     formula: u => v => Vector(
                         x: radius * cos(rad: u),
                         y: radius * sin(rad: u),
@@ -79,7 +97,7 @@ test("Block() - Hole() cuts a through-hole", async () => {
                 ),
                 Surface2D(
                     max_u: pi * 2.0,
-                    max_v: u => radius,
+                    min_v: u => 0.0, max_v: u => radius,
                     formula: u => v => Vector(
                         x: v * cos(rad: u),
                         y: v * sin(rad: u),
@@ -88,20 +106,29 @@ test("Block() - Hole() cuts a through-hole", async () => {
                 ),
                 Surface2D(
                     max_u: pi * 2.0,
-                    max_v: u => radius,
+                    min_v: u => 0.0, max_v: u => radius,
                     formula: u => v => Vector(
                         x: v * cos(rad: u),
                         y: v * sin(rad: u),
                         z: height
                     )
                 )
-            ])
-            expose {}
-        }
-        def cut = join(fixed: Block(), moving: Hole(), using: centred) {
-            fixed - moving
-        }
-        export(cut)
+            ]),
+            expose: {
+                up: Vector(x: 0.0, y: 0.0, z: 1.0),
+                right: Vector(x: 1.0, y: 0.0, z: 0.0),
+                at: Vector(x: 0.0, y: 0.0, z: height / 2.0)
+            }
+        )
+        def Cut = Component(
+            solid: join(frame: Block, placed: Hole, using: frame => placed => align(
+                planar: meet(frame: frame.up, placed: placed.up),
+                translation: meet(frame: frame.at, placed: placed.at),
+                rotation: meet(frame: frame.right, placed: placed.right)
+            ), combine: frame => placed => frame - placed),
+            expose: {}
+        )
+        export(Cut)
         def spare = 1.0
     `;
     const compiled = compileParaScriptSource(source);
@@ -112,48 +139,62 @@ test("Block() - Hole() cuts a through-hole", async () => {
     assert.equal(pointInsideMesh(mesh, { x: 80, y: 80, z: 5 }), false);
 });
 
-test("Block - Hole calls zero-argument components", async () => {
+test("a component value seats in a join", async () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
         def pi = 3.14159265359
-        component Block() {
-            def size = 40.0
-            def height = 10.0
-            Solid3D(faces: [
-                Surface2D(max_u: size, max_v: u => size, formula: u => v => Vector(x: u, y: v, z: 0.0)),
-                Surface2D(max_u: size, max_v: u => size, formula: u => v => Vector(x: u, y: v, z: height)),
-                Surface2D(max_u: size, max_v: u => height, formula: u => v => Vector(x: u, y: 0.0, z: v)),
-                Surface2D(max_u: size, max_v: u => height, formula: u => v => Vector(x: u, y: size, z: v)),
-                Surface2D(max_u: size, max_v: u => height, formula: u => v => Vector(x: 0.0, y: u, z: v)),
-                Surface2D(max_u: size, max_v: u => height, formula: u => v => Vector(x: size, y: u, z: v))
-            ])
-            expose {}
-        }
-        component Hole() {
-            def radius = 5.0
-            def height = 12.0
-            Solid3D(faces: [
+        def size = 40.0
+        def height = 10.0
+        def Block = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => size, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => size, formula: u => v => Vector(x: u, y: v, z: height)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u, y: size, z: v)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+                Surface2D(max_u: size, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: size, y: u, z: v))
+            ]),
+            expose: {
+                up: Vector(x: 0.0, y: 0.0, z: 1.0),
+                right: Vector(x: 1.0, y: 0.0, z: 0.0),
+                at: Vector(x: size / 2.0, y: size / 2.0, z: height / 2.0)
+            }
+        )
+        def radius = 5.0
+        def height = 12.0
+        def Hole = Component(
+            solid: Solid3D(faces: [
                 Surface2D(
                     max_u: pi * 2.0,
-                    max_v: u => height,
+                    min_v: u => 0.0, max_v: u => height,
                     formula: u => v => Vector(x: radius * cos(rad: u), y: radius * sin(rad: u), z: v)
                 ),
                 Surface2D(
                     max_u: pi * 2.0,
-                    max_v: u => radius,
+                    min_v: u => 0.0, max_v: u => radius,
                     formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: 0.0)
                 ),
                 Surface2D(
                     max_u: pi * 2.0,
-                    max_v: u => radius,
+                    min_v: u => 0.0, max_v: u => radius,
                     formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: height)
                 )
-            ])
-            expose {}
-        }
-        export(join(fixed: Block, moving: Hole, using: centred) {
-            fixed - moving
-        })
+            ]),
+            expose: {
+                up: Vector(x: 0.0, y: 0.0, z: 1.0),
+                right: Vector(x: 1.0, y: 0.0, z: 0.0),
+                at: Vector(x: 0.0, y: 0.0, z: height / 2.0)
+            }
+        )
+        def Drilled = Component(
+            solid: join(frame: Block, placed: Hole, using: frame => placed => align(
+                planar: meet(frame: frame.up, placed: placed.up),
+                translation: meet(frame: frame.at, placed: placed.at),
+                rotation: meet(frame: frame.right, placed: placed.right)
+            ), combine: frame => placed => frame - placed),
+            expose: {}
+        )
+        export(Drilled)
         def spare = 1.0
     `;
     const compiled = compileParaScriptSource(source);
@@ -164,23 +205,16 @@ test("Block - Hole calls zero-argument components", async () => {
     assert.equal(pointInsideMesh(mesh, { x: 20, y: 20, z: 5 }), false);
 });
 
-test("export inside a component is kept when a later value is a number", async () => {
+test("export is kept when a later value is a number", async () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component Plate() {
-            component Face() {
-                Solid3D(faces: [
-                    Surface2D(max_u: 8.0, max_v: u => 8.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
-                ])
-                expose {}
-            }
-            export(Face())
-            Solid3D(faces: [
-                Surface2D(max_u: 8.0, max_v: u => 8.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
-            ])
-            expose {}
-        }
-        def shown = Plate()
+        def Face = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 8.0, min_v: u => 0.0, max_v: u => 8.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
+            ]),
+            expose: {}
+        )
+        export(Face)
         def spare = 2.0
     `;
     const compiled = compileParaScriptSource(source);
@@ -191,19 +225,35 @@ test("export inside a component is kept when a later value is a number", async (
 
 function solidBox(name: string, sx: string, sy: string, sz: string): string {
     return `
-        component ${name}() {
-            Solid3D(faces: [
-                Surface2D(max_u: ${sx}, max_v: u => ${sy}, formula: u => v => Vector(x: u, y: v, z: 0.0)),
-                Surface2D(max_u: ${sx}, max_v: u => ${sy}, formula: u => v => Vector(x: u, y: v, z: ${sz})),
-                Surface2D(max_u: ${sx}, max_v: u => ${sz}, formula: u => v => Vector(x: u, y: 0.0, z: v)),
-                Surface2D(max_u: ${sx}, max_v: u => ${sz}, formula: u => v => Vector(x: u, y: ${sy}, z: v)),
-                Surface2D(max_u: ${sy}, max_v: u => ${sz}, formula: u => v => Vector(x: 0.0, y: u, z: v)),
-                Surface2D(max_u: ${sy}, max_v: u => ${sz}, formula: u => v => Vector(x: ${sx}, y: u, z: v))
-            ])
-            expose {}
-        }
+        def ${name} = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: ${sx}, min_v: u => 0.0, max_v: u => ${sy}, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+                Surface2D(max_u: ${sx}, min_v: u => 0.0, max_v: u => ${sy}, formula: u => v => Vector(x: u, y: v, z: ${sz})),
+                Surface2D(max_u: ${sx}, min_v: u => 0.0, max_v: u => ${sz}, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+                Surface2D(max_u: ${sx}, min_v: u => 0.0, max_v: u => ${sz}, formula: u => v => Vector(x: u, y: ${sy}, z: v)),
+                Surface2D(max_u: ${sy}, min_v: u => 0.0, max_v: u => ${sz}, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+                Surface2D(max_u: ${sy}, min_v: u => 0.0, max_v: u => ${sz}, formula: u => v => Vector(x: ${sx}, y: u, z: v))
+            ]),
+            expose: {
+                up: Vector(x: 0.0, y: 0.0, z: 1.0),
+                right: Vector(x: 1.0, y: 0.0, z: 0.0),
+                at: Vector(x: ${sx} / 2.0, y: ${sy} / 2.0, z: ${sz} / 2.0)
+            }
+        )
     `;
 }
+
+const keptParallel = `frame => placed => align(
+    planar: meet(frame: frame.up, placed: placed.up),
+    translation: meet(frame: frame.at, placed: placed.at),
+    rotation: meet(frame: frame.right, placed: placed.right)
+)`;
+
+const apartByRight = `frame => placed => align(
+    planar: meet(frame: frame.up, placed: placed.up),
+    translation: meet(frame: frame.at + Vector(x: 20.0, y: 0.0, z: 0.0), placed: placed.at),
+    rotation: meet(frame: frame.right, placed: placed.right)
+)`;
 
 test("a join union keeps both solids, and a nested subtract cuts the fused solid", async () => {
     const parts = `
@@ -213,25 +263,41 @@ test("a join union keeps both solids, and a nested subtract cuts the fused solid
         ${solidBox("Slab", "40.0", "10.0", "2.0")}
     `;
     const fused = compileParaScriptSource(`${parts}
-        export(join(fixed: Left(), moving: Right(), using: apart(right: 20.0, forward: 0.0, up: 0.0)) {
-            moving + fixed
-        })
+        def Fused = Component(
+            solid: join(frame: Left, placed: Right, using: ${apartByRight}, combine: frame => placed => placed + frame),
+            expose: {}
+        )
+        export(Fused)
     `);
     const cutFused = compileParaScriptSource(`${parts}
-        export(join(fixed: Left(), moving: Right(), using: apart(right: 20.0, forward: 0.0, up: 0.0)) {
-            def fused = fixed + moving
-            join(fixed: fused, moving: Slab(), using: centred) {
-                fixed - moving
+        def Pair = Component(
+            solid: join(frame: Left, placed: Right, using: ${apartByRight}, combine: frame => placed => frame + placed),
+            expose: {
+                up: Vector(x: 0.0, y: 0.0, z: 1.0),
+                right: Vector(x: 1.0, y: 0.0, z: 0.0),
+                at: Vector(x: 15.0, y: 5.0, z: 5.0)
             }
-        })
+        )
+        def Cut = Component(
+            solid: join(frame: Pair, placed: Slab, using: ${keptParallel}, combine: frame => placed => frame - placed),
+            expose: {}
+        )
+        export(Cut)
     `);
     const cutRight = compileParaScriptSource(`${parts}
-        export(join(fixed: Right(), moving: Slab(), using: centred) {
-            def cut = fixed - moving
-            join(fixed: Left(), moving: cut, using: apart(right: 20.0, forward: 0.0, up: 0.0)) {
-                fixed + moving
+        def CutRight = Component(
+            solid: join(frame: Right, placed: Slab, using: ${keptParallel}, combine: frame => placed => frame - placed),
+            expose: {
+                up: Vector(x: 0.0, y: 0.0, z: 1.0),
+                right: Vector(x: 1.0, y: 0.0, z: 0.0),
+                at: Vector(x: 5.0, y: 5.0, z: 5.0)
             }
-        })
+        )
+        def Kept = Component(
+            solid: join(frame: Left, placed: CutRight, using: ${apartByRight}, combine: frame => placed => frame + placed),
+            expose: {}
+        )
+        export(Kept)
     `);
     assert.equal(fused.success, true, fused.errorMessage ?? "");
     assert.equal(cutFused.success, true, cutFused.errorMessage ?? "");
@@ -255,13 +321,11 @@ test("a component can be the join of two components", async () => {
         setup { units: "mm", coordinate_system: "Z-up" }
         ${solidBox("Left", "10.0", "10.0", "10.0")}
         ${solidBox("Right", "10.0", "10.0", "10.0")}
-        component Pair() {
-            join(fixed: Left(), moving: Right(), using: apart(right: 20.0, forward: 0.0, up: 0.0)) {
-                fixed + moving
-            }
-            expose {}
-        }
-        export(Pair())
+        def Pair = Component(
+            solid: join(frame: Left, placed: Right, using: ${apartByRight}, combine: frame => placed => frame + placed),
+            expose: {}
+        )
+        export(Pair)
     `;
     const compiled = compileParaScriptSource(source);
     assert.equal(compiled.success, true, compiled.errorMessage ?? "");
@@ -285,56 +349,49 @@ test("workspace sample meshes through the portal loader", async () => {
 test("a join rejects a normal with no direction", async () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component Brick() {
-            Solid3D(faces: [
-                Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
-            ])
-            expose {}
-        }
-        def mate = planar_centred(
-            target_normal: Vector(x: 0.0, y: 0.0, z: 0.0),
-            source_normal: Vector(x: 0.0, y: 0.0, z: 1.0),
-            target_pos: Vector(x: 0.0, y: 0.0, z: 0.0),
-            source_pos: Vector(x: 0.0, y: 0.0, z: 0.0),
-            target_twist: Vector(x: 1.0, y: 0.0, z: 0.0),
-            source_twist: Vector(x: 1.0, y: 0.0, z: 0.0)
+        def Brick = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
+            ]),
+            expose: {}
         )
-        export(join(fixed: Brick(), moving: Brick(), using: mate) {
-            fixed + moving
-        })
+        def mate = align(
+            planar: meet(frame: Vector(x: 0.0, y: 0.0, z: 0.0), placed: Vector(x: 0.0, y: 0.0, z: 1.0)),
+            translation: meet(frame: Vector(x: 0.0, y: 0.0, z: 0.0), placed: Vector(x: 0.0, y: 0.0, z: 0.0)),
+            rotation: meet(frame: Vector(x: 1.0, y: 0.0, z: 0.0), placed: Vector(x: 1.0, y: 0.0, z: 0.0))
+        )
+        def Fused = Component(
+            solid: join(frame: Brick, placed: Brick, using: frame => placed => mate, combine: frame => placed => frame + placed),
+            expose: {}
+        )
+        export(Fused)
     `;
     const compiled = compileParaScriptSource(source);
     assert.equal(compiled.success, true, compiled.errorMessage ?? "");
     await assert.rejects(
         () => evaluateModelModule(compiled.javascriptCode ?? ""),
-        /target normal has no direction/
+        /frame normal has no direction/
     );
 });
 
-test("an anchor name must be centre, min, or max", async () => {
+test("a meet reads only an anchor the part exposes", async () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component Brick() {
-            Solid3D(faces: [
-                Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
-            ])
-            expose {}
-        }
-        def mate = relate(
-            right: anchor(fixed: centre, moving: "middle", by: 0.0),
-            forward: anchor(fixed: centre, moving: centre, by: 0.0),
-            up: anchor(fixed: centre, moving: centre, by: 0.0)
+        def Brick = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
+            ]),
+            expose: { up: Vector(x: 0.0, y: 0.0, z: 1.0) }
         )
-        export(join(fixed: Brick(), moving: Brick(), using: mate) {
-            fixed + moving
-        })
+        export(join(frame: Brick, placed: Brick, using: frame => placed => align(
+            planar: meet(frame: frame.up, placed: placed.up),
+            translation: meet(frame: frame.at, placed: placed.at),
+            rotation: meet(frame: frame.right, placed: placed.right)
+        ), combine: frame => placed => frame + placed))
     `;
     const compiled = compileParaScriptSource(source);
-    assert.equal(compiled.success, true, compiled.errorMessage ?? "");
-    await assert.rejects(
-        () => evaluateModelModule(compiled.javascriptCode ?? ""),
-        /An anchor is centre, min, max, or origin/
-    );
+    assert.equal(compiled.success, false);
+    assert.match(compiled.errorMessage ?? "", /at is not an anchor on this component/);
 });
 
 test("collectFaces ignores values with no geometry", () => {
@@ -392,37 +449,35 @@ test("exposed anchors seat the void and publish the render origin", async () => 
 test("align rotates around the meeting point in the plane", async () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component Fixed() {
-            Solid3D(faces: [
-                Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
-            ])
-            expose {
+        def FramePart = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
+            ]),
+            expose: {
                 up: Vector(x: 0.0, y: 0.0, z: 1.0),
                 right: Vector(x: 1.0, y: 0.0, z: 0.0),
                 at: Vector(x: 10.0, y: 0.0, z: 0.0)
             }
-        }
-        component Moving() {
-            Solid3D(faces: [
-                Surface2D(max_u: 2.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: u, z: v))
-            ])
-            expose {
+        )
+        def PlacedPart = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 2.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: u, z: v))
+            ]),
+            expose: {
                 up: Vector(x: 0.0, y: 0.0, z: 1.0),
                 right: Vector(x: 0.0, y: 1.0, z: 0.0),
                 at: Vector(x: 0.0, y: 0.0, z: 0.0)
             }
-        }
-        component Turned() {
-            join(fixed: Fixed(), moving: Moving(), using: align(
-                planar: meet(fixed: fixed.up, moving: moving.up),
-                translation: meet(fixed: fixed.at, moving: moving.at),
-                rotation: meet(fixed: fixed.right, moving: moving.right)
-            )) {
-                fixed + moving
-            }
-            expose { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
-        }
-        export(Turned())
+        )
+        def Turned = Component(
+            solid: join(frame: FramePart, placed: PlacedPart, using: frame => placed => align(
+                planar: meet(frame: frame.up, placed: placed.up),
+                translation: meet(frame: frame.at, placed: placed.at),
+                rotation: meet(frame: frame.right, placed: placed.right)
+            ), combine: frame => placed => frame + placed),
+            expose: { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
+        )
+        export(Turned)
     `;
     const compiled = compileParaScriptSource(source);
     assert.equal(compiled.success, true, compiled.errorMessage ?? "");
@@ -445,37 +500,35 @@ test("align rotates around the meeting point in the plane", async () => {
 test("align makes the planes parallel before it translates", async () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component Fixed() {
-            Solid3D(faces: [
-                Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: 0.0, z: v))
-            ])
-            expose {
+        def FramePart = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: 0.0, z: v))
+            ]),
+            expose: {
                 up: Vector(x: 0.0, y: 1.0, z: 0.0),
                 right: Vector(x: 1.0, y: 0.0, z: 0.0),
                 at: Vector(x: 4.0, y: 0.0, z: 0.0)
             }
-        }
-        component Moving() {
-            Solid3D(faces: [
-                Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: 0.0, z: v))
-            ])
-            expose {
+        )
+        def PlacedPart = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: 0.0, z: v))
+            ]),
+            expose: {
                 up: Vector(x: 0.0, y: 0.0, z: 1.0),
                 right: Vector(x: 1.0, y: 0.0, z: 0.0),
                 at: Vector(x: 0.0, y: 0.0, z: 0.0)
             }
-        }
-        component Turned() {
-            join(fixed: Fixed(), moving: Moving(), using: align(
-                planar: meet(fixed: fixed.up, moving: moving.up),
-                translation: meet(fixed: fixed.at, moving: moving.at),
-                rotation: meet(fixed: fixed.right, moving: moving.right)
-            )) {
-                fixed + moving
-            }
-            expose { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
-        }
-        export(Turned())
+        )
+        def Turned = Component(
+            solid: join(frame: FramePart, placed: PlacedPart, using: frame => placed => align(
+                planar: meet(frame: frame.up, placed: placed.up),
+                translation: meet(frame: frame.at, placed: placed.at),
+                rotation: meet(frame: frame.right, placed: placed.right)
+            ), combine: frame => placed => frame + placed),
+            expose: { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
+        )
+        export(Turned)
     `;
     const compiled = compileParaScriptSource(source);
     assert.equal(compiled.success, true, compiled.errorMessage ?? "");

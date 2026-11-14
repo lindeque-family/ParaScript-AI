@@ -37,41 +37,30 @@ export class WebCodeGenerator {
         js += this.indent(`    return found;\n`);
         js += this.indent(`};\n\n`);
 
-        const directionAxis = program.setup.coordinateSystem === "Y-up"
-            ? `{ right: "x", forward: "z", up: "y" }`
-            : program.setup.coordinateSystem === "X-up"
-                ? `{ right: "y", forward: "z", up: "x" }`
-                : `{ right: "x", forward: "y", up: "z" }`;
-        js += this.indent(`const directionAxis = ${directionAxis};\n`);
-        js += this.indent(`const axisSpec = (fixed, moving, by) => ({ tag: "Axis", fixed, moving, by });\n`);
-        js += this.indent(`env.centre = "centre";\n`);
-        js += this.indent(`env.center = "centre";\n`);
-        js += this.indent(`env.min = "min";\n`);
-        js += this.indent(`env.max = "max";\n`);
-        js += this.indent(`env.origin = "origin";\n`);
-        js += this.indent(`env.anchor = (fixed, moving, by) => axisSpec(fixed, moving, by);\n`);
-        js += this.indent(`env.relate = (right, forward, up) => ({ tag: "ConstraintSet", type: "relate", right, forward, up });\n`);
-        js += this.indent(`env.centred = env.relate(axisSpec("centre", "centre", 0), axisSpec("centre", "centre", 0), axisSpec("centre", "centre", 0));\n`);
-        js += this.indent(`env.inset = (by) => env.relate(axisSpec("min", "min", by), axisSpec("min", "min", by), axisSpec("min", "min", by));\n`);
-        js += this.indent(`env.apart = (right, forward, up) => env.relate(axisSpec("centre", "centre", right), axisSpec("centre", "centre", forward), axisSpec("centre", "centre", up));\n`);
-        js += this.indent(`env.on_top = (overlap) => env.relate(axisSpec("centre", "centre", 0), axisSpec("centre", "centre", 0), axisSpec("max", "min", 0 - overlap));\n`);
-        js += this.indent(`env.below = (overlap) => env.relate(axisSpec("centre", "centre", 0), axisSpec("centre", "centre", 0), axisSpec("min", "max", overlap));\n`);
-        js += this.indent(`env.meet = (fixed, moving) => ({ tag: "Meet", fixed, moving });\n`);
+        js += this.indent(`env.meet = (frame, placed) => ({ tag: "Meet", frame, placed });\n`);
         js += this.indent(`env.align = (planar, translation, rotation) => ({ tag: "ConstraintSet", type: "align", planar, translation, rotation });\n`);
-        js += this.indent(`env.planar_centred = (tn, sn, tp, sp, tt, st) => ({ tag: "ConstraintSet", type: "planar_centred", tn, sn, tp, sp, tt, st });\n`);
+        js += this.indent(`const applyMate = (fn, framePart, placedPart) => {\n`);
+        js += this.indent(`    const resolve = (item) => (typeof item === "function" ? item() : item);\n`);
+        js += this.indent(`    if (typeof fn !== "function") throw new Error("using needs frame => placed => ConstraintSet.");\n`);
+        js += this.indent(`    const step = fn(resolve(framePart));\n`);
+        js += this.indent(`    if (typeof step !== "function") throw new Error("using needs frame => placed => ConstraintSet.");\n`);
+        js += this.indent(`    const mate = step(resolve(placedPart));\n`);
+        js += this.indent(`    if (!mate || mate.tag !== "ConstraintSet") throw new Error("A join places the placed part with a relative mate.");\n`);
+        js += this.indent(`    return mate;\n`);
+        js += this.indent(`};\n`);
         js += this.indent(`env.normal = (u, v, surface) => { /* calculus forward differentiation proxy step */ return { tag: "Vector", x: 0, y: 0, z: 1 }; };\n`);
-        // The fixed solid keeps the join frame. The mate seats only the moving solid.
-        js += this.indent(`const placeAgainst = (fixed, moving, constraint) => {\n`);
+        // The frame part keeps the join's frame. The mate poses only the placed part.
+        js += this.indent(`const placeAgainst = (framePart, placedPart, constraint) => {\n`);
         js += this.indent(`    const resolve = (item) => (typeof item === "function" ? item() : item);\n`);
         js += this.indent(`    const geometryOf = (item) => {\n`);
         js += this.indent(`        let resolved = resolve(item);\n`);
         js += this.indent(`        while (resolved && resolved.tag === "Part") resolved = resolved.geometry;\n`);
         js += this.indent(`        return resolved;\n`);
         js += this.indent(`    };\n`);
-        js += this.indent(`    const fixedSolid = geometryOf(fixed);\n`);
-        js += this.indent(`    const movingSolid = geometryOf(moving);\n`);
-        js += this.indent(`    if (!fixedSolid || !movingSolid) throw new Error("A join places two solids.");\n`);
-        js += this.indent(`    if (!constraint || constraint.tag !== "ConstraintSet") throw new Error("A join places its moving solid with a relative mate.");\n`);
+        js += this.indent(`    const frameSolid = geometryOf(framePart);\n`);
+        js += this.indent(`    const placedSolid = geometryOf(placedPart);\n`);
+        js += this.indent(`    if (!frameSolid || !placedSolid) throw new Error("A join places two solids.");\n`);
+        js += this.indent(`    if (!constraint || constraint.tag !== "ConstraintSet") throw new Error("A join places the placed part with a relative mate.");\n`);
         js += this.indent(`    const axis = (v, what) => {\n`);
         js += this.indent(`        if (!v || typeof v.x !== "number" || typeof v.y !== "number" || typeof v.z !== "number" || !Number.isFinite(v.x) || !Number.isFinite(v.y) || !Number.isFinite(v.z)) throw new Error(what + " needs x, y, and z.");\n`);
         js += this.indent(`        return v;\n`);
@@ -81,74 +70,11 @@ export class WebCodeGenerator {
         js += this.indent(`        if (!(n > 1e-8)) throw new Error(what);\n`);
         js += this.indent(`        return { x: v.x / n, y: v.y / n, z: v.z / n };\n`);
         js += this.indent(`    };\n`);
-        js += this.indent(`    const frame = (normal, twist, which) => {\n`);
-        js += this.indent(`        const z = unit(axis(normal, which + " normal"), which + " normal has no direction.");\n`);
-        js += this.indent(`        const twistDir = unit(axis(twist, which + " twist"), which + " twist has no direction.");\n`);
-        js += this.indent(`        const along = twistDir.x * z.x + twistDir.y * z.y + twistDir.z * z.z;\n`);
-        js += this.indent(`        const x = unit({ x: twistDir.x - z.x * along, y: twistDir.y - z.y * along, z: twistDir.z - z.z * along }, which + " twist has no in-plane direction.");\n`);
-        js += this.indent(`        return { x, y: { x: z.y * x.z - z.z * x.y, y: z.z * x.x - z.x * x.z, z: z.x * x.y - z.y * x.x }, z };\n`);
-        js += this.indent(`    };\n`);
-        js += this.indent(`    const anchorValue = (box, name, axisName) => {\n`);
-        js += this.indent(`        const word = name === "center" ? "centre" : name;\n`);
-        js += this.indent(`        if (word === "origin") return 0;\n`);
-        js += this.indent(`        if (word === "centre") return (box.min[axisName] + box.max[axisName]) / 2;\n`);
-        js += this.indent(`        if (word === "min") return box.min[axisName];\n`);
-        js += this.indent(`        if (word === "max") return box.max[axisName];\n`);
-        js += this.indent(`        throw new Error("An anchor is centre, min, max, or origin.");\n`);
-        js += this.indent(`    };\n`);
-        js += this.indent(`    const measure = (value) => {\n`);
-        js += this.indent(`        const box = { min: { x: Infinity, y: Infinity, z: Infinity }, max: { x: -Infinity, y: -Infinity, z: -Infinity } };\n`);
-        js += this.indent(`        const add = (p) => { if (!p || typeof p.x !== "number") return; box.min.x = Math.min(box.min.x, p.x); box.min.y = Math.min(box.min.y, p.y); box.min.z = Math.min(box.min.z, p.z); box.max.x = Math.max(box.max.x, p.x); box.max.y = Math.max(box.max.y, p.y); box.max.z = Math.max(box.max.z, p.z); };\n`);
-        js += this.indent(`        const visit = (item) => {\n`);
-        js += this.indent(`            const resolved = geometryOf(item);\n`);
-        js += this.indent(`            if (!resolved || typeof resolved !== "object") return;\n`);
-        js += this.indent(`            if (resolved.tag === "Surface2D" && typeof resolved.formula === "function") {\n`);
-        js += this.indent(`                const steps = 16;\n`);
-        js += this.indent(`                const maxU = typeof resolved.maxU === "function" ? resolved.maxU(0) : resolved.maxU;\n`);
-        js += this.indent(`                for (let i = 0; i <= steps; i++) {\n`);
-        js += this.indent(`                    const u = (i / steps) * maxU;\n`);
-        js += this.indent(`                    const maxV = typeof resolved.maxV === "function" ? resolved.maxV(u) : resolved.maxV;\n`);
-        js += this.indent(`                    for (let j = 0; j <= steps; j++) add(resolved.formula(u)((j / steps) * maxV));\n`);
-        js += this.indent(`                }\n`);
-        js += this.indent(`                return;\n`);
-        js += this.indent(`            }\n`);
-        js += this.indent(`            if (resolved.tag === "Solid3D") { if (Array.isArray(resolved.faces)) for (const face of resolved.faces) visit(face); return; }\n`);
-        js += this.indent(`            if (resolved.tag === "Component") { visit(resolved.left); if (resolved.op !== "subtract") visit(resolved.right); return; }\n`);
-        js += this.indent(`        };\n`);
-        js += this.indent(`        visit(value);\n`);
-        js += this.indent(`        if (!Number.isFinite(box.min.x)) throw new Error("A join measures the solids it places.");\n`);
-        js += this.indent(`        return box;\n`);
-        js += this.indent(`    };\n`);
         js += this.indent(`    let mapPoint;\n`);
-        js += this.indent(`    if (constraint.type === "planar_centred") {\n`);
-        js += this.indent(`        const source = frame(constraint.sn, constraint.st, "source");\n`);
-        js += this.indent(`        const target = frame(constraint.tn, constraint.tt, "target");\n`);
-        js += this.indent(`        const sp = axis(constraint.sp, "source position");\n`);
-        js += this.indent(`        const tp = axis(constraint.tp, "target position");\n`);
-        js += this.indent(`        mapPoint = (p) => {\n`);
-        js += this.indent(`            const point = axis(p, "surface point");\n`);
-        js += this.indent(`            const dx = point.x - sp.x, dy = point.y - sp.y, dz = point.z - sp.z;\n`);
-        js += this.indent(`            const cx = dx * source.x.x + dy * source.x.y + dz * source.x.z;\n`);
-        js += this.indent(`            const cy = dx * source.y.x + dy * source.y.y + dz * source.y.z;\n`);
-        js += this.indent(`            const cz = dx * source.z.x + dy * source.z.y + dz * source.z.z;\n`);
-        js += this.indent(`            return { tag: "Vector", x: tp.x + cx * target.x.x + cy * target.y.x + cz * target.z.x, y: tp.y + cx * target.x.y + cy * target.y.y + cz * target.z.y, z: tp.z + cx * target.x.z + cy * target.y.z + cz * target.z.z };\n`);
-        js += this.indent(`        };\n`);
-        js += this.indent(`    } else if (constraint.type === "relate") {\n`);
-        js += this.indent(`        const fixedBox = measure(fixedSolid);\n`);
-        js += this.indent(`        const movingBox = measure(movingSolid);\n`);
-        js += this.indent(`        const delta = { x: 0, y: 0, z: 0 };\n`);
-        js += this.indent(`        for (const direction of ["right", "forward", "up"]) {\n`);
-        js += this.indent(`            const spec = constraint[direction];\n`);
-        js += this.indent(`            if (!spec || spec.tag !== "Axis") throw new Error("relate needs an anchor for " + direction + ".");\n`);
-        js += this.indent(`            const axisName = directionAxis[direction];\n`);
-        js += this.indent(`            if (typeof spec.by !== "number" || !Number.isFinite(spec.by)) throw new Error("An anchor needs a distance.");\n`);
-        js += this.indent(`            delta[axisName] = anchorValue(fixedBox, spec.fixed, axisName) + spec.by - anchorValue(movingBox, spec.moving, axisName);\n`);
-        js += this.indent(`        }\n`);
-        js += this.indent(`        mapPoint = (p) => { const point = axis(p, "surface point"); return { tag: "Vector", x: point.x + delta.x, y: point.y + delta.y, z: point.z + delta.z }; };\n`);
-        js += this.indent(`    } else if (constraint.type === "align") {\n`);
+        js += this.indent(`    if (constraint.type === "align") {\n`);
         js += this.indent(`        const pair = (value, stage) => {\n`);
         js += this.indent(`            if (!value || value.tag !== "Meet") throw new Error("align needs a " + stage + ".");\n`);
-        js += this.indent(`            return { fixed: axis(value.fixed, "fixed " + stage), moving: axis(value.moving, "moving " + stage) };\n`);
+        js += this.indent(`            return { frame: axis(value.frame, "frame " + stage), placed: axis(value.placed, "placed " + stage) };\n`);
         js += this.indent(`        };\n`);
         js += this.indent(`        const planar = pair(constraint.planar, "planar");\n`);
         js += this.indent(`        const translation = pair(constraint.translation, "translation");\n`);
@@ -162,34 +88,34 @@ export class WebCodeGenerator {
         js += this.indent(`            const c = Math.cos(radians), s = Math.sin(radians), t = 1 - c;\n`);
         js += this.indent(`            return [t*u.x*u.x + c, t*u.x*u.y - s*u.z, t*u.x*u.z + s*u.y, t*u.x*u.y + s*u.z, t*u.y*u.y + c, t*u.y*u.z - s*u.x, t*u.x*u.z - s*u.y, t*u.y*u.z + s*u.x, t*u.z*u.z + c];\n`);
         js += this.indent(`        };\n`);
-        js += this.indent(`        const movingNormal = unit(planar.moving, "moving normal has no direction.");\n`);
-        js += this.indent(`        const fixedNormal = unit(planar.fixed, "fixed normal has no direction.");\n`);
-        js += this.indent(`        const hinge = cross(movingNormal, fixedNormal);\n`);
+        js += this.indent(`        const placedNormal = unit(planar.placed, "placed normal has no direction.");\n`);
+        js += this.indent(`        const frameNormal = unit(planar.frame, "frame normal has no direction.");\n`);
+        js += this.indent(`        const hinge = cross(placedNormal, frameNormal);\n`);
         js += this.indent(`        const planarTurn = Math.hypot(hinge.x, hinge.y, hinge.z) < 1e-8\n`);
-        js += this.indent(`            ? (dot(movingNormal, fixedNormal) > 0 ? [1,0,0, 0,1,0, 0,0,1] : about(cross(movingNormal, Math.abs(movingNormal.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 }), Math.PI))\n`);
-        js += this.indent(`            : about(hinge, Math.atan2(Math.hypot(hinge.x, hinge.y, hinge.z), dot(movingNormal, fixedNormal)));\n`);
+        js += this.indent(`            ? (dot(placedNormal, frameNormal) > 0 ? [1,0,0, 0,1,0, 0,0,1] : about(cross(placedNormal, Math.abs(placedNormal.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 }), Math.PI))\n`);
+        js += this.indent(`            : about(hinge, Math.atan2(Math.hypot(hinge.x, hinge.y, hinge.z), dot(placedNormal, frameNormal)));\n`);
         js += this.indent(`        const project = (v, n) => { const along = dot(v, n); return { x: v.x - n.x * along, y: v.y - n.y * along, z: v.z - n.z * along }; };\n`);
-        js += this.indent(`        const movingAcross = unit(project(apply(planarTurn, rotation.moving), fixedNormal), "moving rotation has no in-plane direction.");\n`);
-        js += this.indent(`        const fixedAcross = unit(project(rotation.fixed, fixedNormal), "fixed rotation has no in-plane direction.");\n`);
-        js += this.indent(`        const spin = about(fixedNormal, Math.atan2(dot(fixedNormal, cross(movingAcross, fixedAcross)), dot(movingAcross, fixedAcross)));\n`);
+        js += this.indent(`        const placedAcross = unit(project(apply(planarTurn, rotation.placed), frameNormal), "placed rotation has no in-plane direction.");\n`);
+        js += this.indent(`        const frameAcross = unit(project(rotation.frame, frameNormal), "frame rotation has no in-plane direction.");\n`);
+        js += this.indent(`        const spin = about(frameNormal, Math.atan2(dot(frameNormal, cross(placedAcross, frameAcross)), dot(placedAcross, frameAcross)));\n`);
         js += this.indent(`        const orient = mul(spin, planarTurn);\n`);
-        js += this.indent(`        const sp = translation.moving;\n`);
-        js += this.indent(`        const tp = translation.fixed;\n`);
+        js += this.indent(`        const sp = translation.placed;\n`);
+        js += this.indent(`        const tp = translation.frame;\n`);
         js += this.indent(`        mapPoint = (p) => {\n`);
-        js += this.indent(`            const placed = axis(p, "surface point");\n`);
-        js += this.indent(`            const turned = apply(orient, { x: placed.x - sp.x, y: placed.y - sp.y, z: placed.z - sp.z });\n`);
+        js += this.indent(`            const point = axis(p, "surface point");\n`);
+        js += this.indent(`            const turned = apply(orient, { x: point.x - sp.x, y: point.y - sp.y, z: point.z - sp.z });\n`);
         js += this.indent(`            return { tag: "Vector", x: tp.x + turned.x, y: tp.y + turned.y, z: tp.z + turned.z };\n`);
         js += this.indent(`        };\n`);
-        js += this.indent(`    } else throw new Error("A join places its moving solid with a relative mate.");\n`);
+        js += this.indent(`    } else throw new Error("A join places the placed part with a relative mate.");\n`);
         js += this.indent(`    const walk = (item) => {\n`);
         js += this.indent(`        const resolved = geometryOf(item);\n`);
-        js += this.indent(`        if (!resolved || typeof resolved !== "object") throw new Error("A join moves a solid or an assembly.");\n`);
-        js += this.indent(`        if (resolved.tag === "Surface2D") return { tag: "Surface2D", maxU: resolved.maxU, maxV: resolved.maxV, formula: (u) => (v) => mapPoint(resolved.formula(u)(v)) };\n`);
+        js += this.indent(`        if (!resolved || typeof resolved !== "object") throw new Error("A join places a solid or an assembly.");\n`);
+        js += this.indent(`        if (resolved.tag === "Surface2D") return { tag: "Surface2D", maxU: resolved.maxU, minV: resolved.minV, maxV: resolved.maxV, formula: (u) => (v) => mapPoint(resolved.formula(u)(v)) };\n`);
         js += this.indent(`        if (resolved.tag === "Solid3D") return { tag: "Solid3D", faces: Array.isArray(resolved.faces) ? resolved.faces.map((face) => walk(face)) : [] };\n`);
         js += this.indent(`        if (resolved.tag === "Component") return { tag: "Component", op: resolved.op, left: walk(resolved.left), right: walk(resolved.right) };\n`);
-        js += this.indent(`        throw new Error("A join moves a solid or an assembly.");\n`);
+        js += this.indent(`        throw new Error("A join places a solid or an assembly.");\n`);
         js += this.indent(`    };\n`);
-        js += this.indent(`    return walk(movingSolid);\n`);
+        js += this.indent(`    return walk(placedSolid);\n`);
         js += this.indent(`};\n\n`);
 
         for (const statement of program.body) {
@@ -216,35 +142,8 @@ export class WebCodeGenerator {
                 return out;
             }
             case "ExportStatement":
-                // The published slot stays outside every component and join scope.
+                // The published slot stays outside every join scope.
                 return this.indent(`publishedModel.current = ${this.generateExpression(node.value)};\n`);
-            case "ComponentDeclaration": {
-                const parent = this.scopeName;
-                const localName = `localEnv${this.scopeDepth++}`;
-                let out = this.indent(`${parent}.${node.name.name} = function(`);
-                out += node.parameters.map(p => p.name.name).join(", ") + `) {\n`;
-                this.indentLevel++;
-                out += this.indent(`const ${localName} = Object.create(${parent});\n`);
-                this.scopeName = localName;
-                try {
-                    for (const bodyStmt of node.body) {
-                        out += this.generateStatement(bodyStmt);
-                    }
-                    const geoExpr = this.generateExpression(node.rootGeometry);
-                    out += this.indent(`const partGeometry = ${geoExpr};\n`);
-                    out += this.indent(`const partAnchors = {};\n`);
-                    for (const property of node.expose.properties) {
-                        const anchorValue = this.generateExpression(property.value);
-                        out += this.indent(`partAnchors[${JSON.stringify(property.name.name)}] = ${anchorValue};\n`);
-                    }
-                    out += this.indent(`return { tag: "Part", geometry: partGeometry, anchors: partAnchors };\n`);
-                } finally {
-                    this.indentLevel--;
-                    this.scopeName = parent;
-                }
-                out += this.indent(`};\n`);
-                return out;
-            }
             default: {
                 return this.indent(`${this.scopeName}._last_evaluated = ${this.generateExpression(node as ExpressionNode)};\n`);
             }
@@ -324,17 +223,15 @@ export class WebCodeGenerator {
             }
             case "JoinDomain": {
                 const parent = this.scopeName;
-                const fixed = this.generateExpression(node.fixed);
-                const moving = this.generateExpression(node.moving);
+                const frame = this.generateExpression(node.frame);
+                const placed = this.generateExpression(node.placed);
                 const domainName = `domainEnv${this.scopeDepth++}`;
                 this.scopeName = domainName;
                 try {
-                    // The mate is generated in the domain so fixed.cavity sees the two parts.
+                    // using and combine close over this domain. applyMate runs before the placed part moves.
                     const using = this.generateExpression(node.using);
-                    let inner = "";
-                    for (const statement of node.body) inner += this.generateStatement(statement);
-                    const result = this.generateExpression(node.result);
-                    return `(() => {\nconst ${domainName} = Object.create(${parent});\n${domainName}.fixed = ${fixed};\n${domainName}.moving = ${moving};\n${domainName}.using = ${using};\n${domainName}.moving = placeAgainst(${domainName}.fixed, ${domainName}.moving, ${domainName}.using);\n${domainName}.fixed = asSolid(${domainName}.fixed);\n${inner}return ${result};\n})()`;
+                    const combine = this.generateExpression(node.combine);
+                    return `(() => {\nconst ${domainName} = Object.create(${parent});\n${domainName}.frame = ${frame};\n${domainName}.placed = ${placed};\n${domainName}.using = applyMate(${using}, ${domainName}.frame, ${domainName}.placed);\n${domainName}.placed = placeAgainst(${domainName}.frame, ${domainName}.placed, ${domainName}.using);\n${domainName}.frame = asSolid(${domainName}.frame);\nreturn (${combine})(${domainName}.frame)(${domainName}.placed);\n})()`;
                 } finally {
                     this.scopeName = parent;
                 }
@@ -373,13 +270,21 @@ export class WebCodeGenerator {
             }
             case "Surface2DNode": {
                 const maxU = this.generateExpression(node.maxU);
+                const minV = this.generateExpression(node.minV);
                 const maxV = this.generateExpression(node.maxV);
                 const formula = this.generateExpression(node.formula);
-                return `{ tag: "Surface2D", maxU: ${maxU}, maxV: ${maxV}, formula: ${formula} }`;
+                return `{ tag: "Surface2D", maxU: ${maxU}, minV: ${minV}, maxV: ${maxV}, formula: ${formula} }`;
             }
             case "Solid3DNode": {
                 const faces = this.generateExpression(node.faces);
                 return `{ tag: "Solid3D", faces: ${faces} }`;
+            }
+            case "ComponentExpression": {
+                const solid = this.generateExpression(node.solid);
+                const anchors = node.expose.properties.map((property) =>
+                    `partAnchors[${JSON.stringify(property.name.name)}] = ${this.generateExpression(property.value)};`
+                ).join(" ");
+                return `(() => { const partGeometry = ${solid}; const partAnchors = {}; ${anchors} return { tag: "Part", geometry: partGeometry, anchors: partAnchors }; })()`;
             }
             case "ArrayMatchStatement": {
                 const target = this.generateExpression(node.targetArray);

@@ -1,0 +1,275 @@
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+// A broom standing on its bristles. The stick, ferrule, head, and skirt are
+// separate solids. Joins pose the placed part into the frame part.
+// The hanger is a hole through the top of the handle.
+// origin is the point the renderer hangs the broom on.
+def pi = 3.14159265359
+
+def handle_r = 11.0
+def handle_len = 1000.0
+def hang_r = 4.0
+def hang_from_top = 30.0
+def hang_span = handle_r * 2.0 + 8.0
+
+def head_w = 240.0
+def head_d = 50.0
+def head_h = 24.0
+
+def ferrule_r = 16.0
+def ferrule_h = 36.0
+def ferrule_bite = 1.0
+def embed = 14.0
+
+def bristle_h = 90.0
+def bristle_bite = 3.0
+def top_hw = 110.0
+def top_hd = 18.0
+def bot_hw = 150.0
+def bot_hd = 34.0
+
+// The handle passes through the ferrule and sinks this far into the head.
+def socket = ferrule_h - ferrule_bite + embed
+def handle_bottom = head_h - embed
+def handle_top = handle_bottom + handle_len
+def bristle_tip = bristle_bite - bristle_h
+
+def Handle = Component(
+    solid: Solid3D(faces: [
+        Surface2D(
+            max_u: 2.0 * pi,
+            min_v: u => 0.0, max_v: u => handle_len,
+            formula: u => v => Vector(
+                x: handle_r * cos(rad: u),
+                y: handle_r * sin(rad: u),
+                z: v
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            min_v: u => 0.0, max_v: u => handle_r,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: v * sin(rad: u),
+                z: 0.0
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            min_v: u => 0.0, max_v: u => handle_r,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: v * sin(rad: u),
+                z: handle_len
+            )
+        )
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        top: Vector(x: 0.0, y: 0.0, z: handle_len)
+    }
+)
+
+def half = hang_span / 2.0
+def HangHole = Component(
+    solid: Solid3D(faces: [
+        Surface2D(
+            max_u: 2.0 * pi,
+            min_v: u => 0.0, max_v: u => hang_span,
+            formula: u => v => Vector(
+                x: hang_r * cos(rad: u),
+                y: 0.0 - half + v,
+                z: hang_r * sin(rad: u)
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            min_v: u => 0.0, max_v: u => hang_r,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: 0.0 - half,
+                z: v * sin(rad: u)
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            min_v: u => 0.0, max_v: u => hang_r,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: half,
+                z: v * sin(rad: u)
+            )
+        )
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def Stick = Component(
+    solid: join(frame: Handle, placed: HangHole, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.top + Vector(x: 0.0, y: 0.0, z: 0.0 - hang_from_top), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame - placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        bottom: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def Head = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: head_w, min_v: u => 0.0, max_v: u => head_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: head_w, min_v: u => 0.0, max_v: u => head_d, formula: u => v => Vector(x: u, y: v, z: head_h)),
+        Surface2D(max_u: head_w, min_v: u => 0.0, max_v: u => head_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: head_w, min_v: u => 0.0, max_v: u => head_h, formula: u => v => Vector(x: u, y: head_d, z: v)),
+        Surface2D(max_u: head_d, min_v: u => 0.0, max_v: u => head_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: head_d, min_v: u => 0.0, max_v: u => head_h, formula: u => v => Vector(x: head_w, y: u, z: v))
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        top: Vector(x: head_w / 2.0, y: head_d / 2.0, z: head_h)
+    }
+)
+
+def Ferrule = Component(
+    solid: Solid3D(faces: [
+        Surface2D(
+            max_u: 2.0 * pi,
+            min_v: u => 0.0, max_v: u => ferrule_h,
+            formula: u => v => Vector(
+                x: ferrule_r * cos(rad: u),
+                y: ferrule_r * sin(rad: u),
+                z: v
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            min_v: u => 0.0, max_v: u => ferrule_r,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: v * sin(rad: u),
+                z: 0.0
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            min_v: u => 0.0, max_v: u => ferrule_r,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: v * sin(rad: u),
+                z: ferrule_h
+            )
+        )
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        bottom: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def Collar = Component(
+    solid: join(frame: Head, placed: Ferrule, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.top + Vector(x: 0.0, y: 0.0, z: 0.0 - ferrule_bite), placed: placed.bottom),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        top: Vector(x: head_w / 2.0, y: head_d / 2.0, z: head_h - ferrule_bite + ferrule_h)
+    }
+)
+
+def Headed = Component(
+    solid: join(frame: Collar, placed: Stick, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.top + Vector(x: 0.0, y: 0.0, z: 0.0 - socket), placed: placed.bottom),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        seat: Vector(x: head_w / 2.0, y: head_d / 2.0, z: 0.0)
+    }
+)
+
+// The skirt is narrow where it enters the head and wider at the floor.
+def Bristles = Component(
+    solid: Solid3D(faces: [
+        Surface2D(
+            max_u: bot_hw * 2.0,
+            min_v: u => 0.0, max_v: u => bot_hd * 2.0,
+            formula: u => v => Vector(x: u - bot_hw, y: v - bot_hd, z: 0.0)
+        ),
+        Surface2D(
+            max_u: top_hw * 2.0,
+            min_v: u => 0.0, max_v: u => top_hd * 2.0,
+            formula: u => v => Vector(x: u - top_hw, y: v - top_hd, z: bristle_h)
+        ),
+        Surface2D(
+            max_u: bristle_h,
+            min_v: u => 0.0, max_v: u => 1.0,
+            formula: u => v => Vector(
+                x: (0.0 - (bot_hw + (top_hw - bot_hw) * (u / bristle_h))) + v * 2.0 * (bot_hw + (top_hw - bot_hw) * (u / bristle_h)),
+                y: 0.0 - (bot_hd + (top_hd - bot_hd) * (u / bristle_h)),
+                z: u
+            )
+        ),
+        Surface2D(
+            max_u: bristle_h,
+            min_v: u => 0.0, max_v: u => 1.0,
+            formula: u => v => Vector(
+                x: (0.0 - (bot_hw + (top_hw - bot_hw) * (u / bristle_h))) + v * 2.0 * (bot_hw + (top_hw - bot_hw) * (u / bristle_h)),
+                y: bot_hd + (top_hd - bot_hd) * (u / bristle_h),
+                z: u
+            )
+        ),
+        Surface2D(
+            max_u: bristle_h,
+            min_v: u => 0.0, max_v: u => 1.0,
+            formula: u => v => Vector(
+                x: 0.0 - (bot_hw + (top_hw - bot_hw) * (u / bristle_h)),
+                y: (0.0 - (bot_hd + (top_hd - bot_hd) * (u / bristle_h))) + v * 2.0 * (bot_hd + (top_hd - bot_hd) * (u / bristle_h)),
+                z: u
+            )
+        ),
+        Surface2D(
+            max_u: bristle_h,
+            min_v: u => 0.0, max_v: u => 1.0,
+            formula: u => v => Vector(
+                x: bot_hw + (top_hw - bot_hw) * (u / bristle_h),
+                y: (0.0 - (bot_hd + (top_hd - bot_hd) * (u / bristle_h))) + v * 2.0 * (bot_hd + (top_hd - bot_hd) * (u / bristle_h)),
+                z: u
+            )
+        )
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        top: Vector(x: 0.0, y: 0.0, z: bristle_h)
+    }
+)
+
+def Broom = Component(
+    solid: join(frame: Headed, placed: Bristles, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.seat + Vector(x: 0.0, y: 0.0, z: bristle_bite), placed: placed.top),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        origin: Vector(x: head_w / 2.0, y: head_d / 2.0, z: (handle_top + bristle_tip) / 2.0)
+    }
+)
+
+export(Broom)

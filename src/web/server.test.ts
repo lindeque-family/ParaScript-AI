@@ -7,7 +7,7 @@ test("resolveRequestFile serves the portal page and compiled modules", () => {
     assert.equal(resolveRequestFile("/")?.endsWith("/src/web/index.html"), true);
     assert.equal(resolveRequestFile("/index.html")?.endsWith("/src/web/index.html"), true);
     assert.equal(resolveRequestFile("/dist/web/main.js")?.endsWith("/dist/web/main.js"), true);
-    assert.equal(resolveRequestFile("/dist/web/main.js?v=18")?.endsWith("/dist/web/main.js"), true);
+    assert.equal(resolveRequestFile("/dist/web/main.js?v=20")?.endsWith("/dist/web/main.js"), true);
     assert.equal(resolveRequestFile("/dist/parascript/compile.js")?.endsWith("/dist/parascript/compile.js"), true);
 });
 
@@ -30,11 +30,11 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(page.headers.get("content-type") ?? "", /text\/html/);
         assert.equal(page.headers.get("cache-control"), "no-store");
         const html = await page.text();
-        assert.match(html, /src="\/dist\/web\/main\.js\?v=18"/);
+        assert.match(html, /src="\/dist\/web\/main\.js\?v=20"/);
         assert.match(html, /id="solid-sides"/);
         assert.match(html, /type="checkbox"/);
 
-        const moduleResponse = await fetch(`${base}/dist/web/main.js?v=18`);
+        const moduleResponse = await fetch(`${base}/dist/web/main.js?v=20`);
         assert.equal(moduleResponse.status, 200);
         assert.equal(moduleResponse.headers.get("cache-control"), "no-store");
         assert.match(moduleResponse.headers.get("content-type") ?? "", /javascript/);

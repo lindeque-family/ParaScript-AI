@@ -56,11 +56,6 @@ export function unify(t1: Type, t2: Type): void {
         return;
     }
 
-    if (p1.tag === "Domain" || p2.tag === "Domain") {
-        if (p1.tag === "Domain" && p2.tag === "Domain" && p1.id === p2.id) return;
-        throw new Error(`Type Inference Error: Structural Unification Mismatch. Cannot resolve type structure '${p1.tag}' with target contract type '${p2.tag}'.`);
-    }
-
     if (p1.tag === p2.tag) {
         return; // Primitive type matching resolved successfully
     }

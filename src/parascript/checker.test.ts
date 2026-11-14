@@ -12,11 +12,11 @@ import { prune } from "./types.js";
 
 // Helper driver to simplify running the parser + type inference engine sequence
 const publishedComponent = `
-    component published_part() {
-        Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))])
-        expose {}
-    }
-    export(published_part())
+    def published_part = Component(
+        solid: Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]),
+        expose: {}
+    )
+    export(published_part)
 `;
 
 function inferSourceEnvironment(source: string) {
@@ -36,27 +36,22 @@ test("Infers Primitive Floats and Overloaded Component Arithmetic", () => {
         def scalar_b = 10.0
         def combined_scalar = scalar_a + scalar_b
         
-        component Block() {
-            def faces_list = [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x:u, y:v, z:0))]
-            Solid3D(faces: faces_list)
-            expose {}
-        }
+        def faces_list = [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x:u, y:v, z:0))]
+        def Block = Component(
+            solid: Solid3D(faces: faces_list),
+            expose: {}
+        )
         
-        def instance_a = Block()
-        def instance_b = Block()
-        def mate = planar_centred(
-            target_normal: Vector(x: 0.0, y: 0.0, z: 1.0),
-            source_normal: Vector(x: 0.0, y: 0.0, z: 1.0),
-            target_pos: Vector(x: 0.0, y: 0.0, z: 0.0),
-            source_pos: Vector(x: 0.0, y: 0.0, z: 0.0),
-            target_twist: Vector(x: 1.0, y: 0.0, z: 0.0),
-            source_twist: Vector(x: 0.0, y: 1.0, z: 0.0)
+        def instance_a = Block
+        def instance_b = Block
+        def mate = align(
+            planar: meet(frame: Vector(x: 0.0, y: 0.0, z: 1.0), placed: Vector(x: 0.0, y: 0.0, z: 1.0)),
+            translation: meet(frame: Vector(x: 0.0, y: 0.0, z: 0.0), placed: Vector(x: 0.0, y: 0.0, z: 0.0)),
+            rotation: meet(frame: Vector(x: 1.0, y: 0.0, z: 0.0), placed: Vector(x: 1.0, y: 0.0, z: 0.0))
         )
 
-        def subtracted_geometry = join(fixed: instance_a, moving: instance_b, using: mate) {
-            def span = scalar_a - scalar_b
-            fixed - moving
-        }
+        def span = scalar_a - scalar_b
+        def subtracted_geometry = join(frame: instance_a, placed: instance_b, using: frame => placed => mate, combine: frame => placed => frame - placed)
     `;
     
     const env = inferSourceEnvironment(source);
@@ -67,7 +62,7 @@ test("Infers Primitive Floats and Overloaded Component Arithmetic", () => {
 
     // Verify uniform operator overloading resolving components cleanly
     const geometryType = prune(env.lookup("subtracted_geometry").type);
-    assert.equal(geometryType.tag, "Component");
+    assert.equal(geometryType.tag, "Solid3D");
 });
 
 // ----------------------------------------------------------------------------
@@ -76,40 +71,36 @@ test("Infers Primitive Floats and Overloaded Component Arithmetic", () => {
 test("Successfully Resolves Curried Named Call Expressions", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component MockPart() {
-            def faces_list = [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x:u, y:v, z:0))]
-            Solid3D(faces: faces_list)
-            expose {}
-        }
+        def faces_list = [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x:u, y:v, z:0))]
+        def MockPart = Component(
+            solid: Solid3D(faces: faces_list),
+            expose: {}
+        )
         
-        def part_fixed  = MockPart()
-        def part_moving = MockPart()
+        def part_frame  = MockPart
+        def part_placed = MockPart
         
         def mock_normal = Vector(x: 0.0, y: 0.0, z: 1.0)
         def mock_pos    = Vector(x: 0.0, y: 0.0, z: 0.0)
         
-        def rigid_constraint = planar_centred(
-            target_normal: mock_normal,
-            source_normal: mock_normal,
-            target_pos:    mock_pos,
-            source_pos:    mock_pos,
-            target_twist:  mock_normal,
-            source_twist:  mock_normal
+        def rigid_constraint = align(
+            planar: meet(frame: mock_normal, placed: mock_normal),
+            translation: meet(frame: mock_pos, placed: mock_pos),
+            rotation: meet(frame: mock_normal, placed: mock_normal)
         )
         
         def completed_assembly = join(
-            fixed: part_fixed,
-            moving: part_moving,
-            using: rigid_constraint
-        ) {
-            fixed + moving
-        }
+            frame: part_frame,
+            placed: part_placed,
+            using: frame => placed => rigid_constraint,
+            combine: frame => placed => frame + placed
+        )
     `;
 
     const env = inferSourceEnvironment(source);
     const assemblyType = prune(env.lookup("completed_assembly").type);
-    
-    assert.equal(assemblyType.tag, "Component");
+
+    assert.equal(assemblyType.tag, "Solid3D");
 });
 
 // ----------------------------------------------------------------------------
@@ -118,13 +109,10 @@ test("Successfully Resolves Curried Named Call Expressions", () => {
 test("Compiler Catches and Rejects Invalid Keyword Arguments", () => {
     const invalidKeywordSource = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        def broken_call = planar_centred(
-            target_normal: Vector(x: 0.0, y: 0.0, z: 1.0),
-            source_normal: Vector(x: 0.0, y: 0.0, z: 1.0),
-            target_position: Vector(x: 0.0, y: 0.0, z: 0.0),
-            source_pos: Vector(x: 0.0, y: 0.0, z: 0.0),
-            target_twist: Vector(x: 0.0, y: 0.0, z: 1.0),
-            source_twist: Vector(x: 1.0, y: 0.0, z: 0.0)
+        def broken_call = align(
+            planar: meet(frame: Vector(x: 0.0, y: 0.0, z: 1.0), placed: Vector(x: 0.0, y: 0.0, z: 1.0)),
+            slide: meet(frame: Vector(x: 0.0, y: 0.0, z: 0.0), placed: Vector(x: 0.0, y: 0.0, z: 0.0)),
+            rotation: meet(frame: Vector(x: 1.0, y: 0.0, z: 0.0), placed: Vector(x: 1.0, y: 0.0, z: 0.0))
         )
     `;
 
@@ -167,7 +155,7 @@ test("Verifies Analytical Derivative Functions Match Smooth Manifolds", () => {
         
         def flat_surface = Surface2D(
             max_u: 10.0,
-            max_v: u => 10.0,
+            min_v: u => 0.0, max_v: u => 10.0,
             formula: u => v => Vector(x: u, y: v, z: 0.0)
         )
         
@@ -262,7 +250,7 @@ test("A script must export a component", () => {
 test("Export and geometric operators require components", () => {
     const rawSolid = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        export(Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]))
+        export(Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]))
     `;
     const engine = new TypeInferenceEngine();
     assert.throws(() => {
@@ -271,111 +259,114 @@ test("Export and geometric operators require components", () => {
 
     const rawDifference = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        def cut = Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]) - Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 1.0))])
+        def cut = Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]) - Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 1.0))])
     `;
     assert.throws(() => {
         inferSourceEnvironment(rawDifference);
-    }, /Type Inference Error: Operator '-' is only defined inside their join/);
+    }, /Type Inference Error: Operator '-' is only defined for SeatedSolid3D/);
 });
 
 test("Geometric operators exist only inside their join", () => {
     const block = `
-        component Block() {
-            Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))])
-            expose {}
-        }
+        def Block = Component(
+            solid: Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]),
+            expose: {}
+        )
     `;
     const mate = `
-        def mate = planar_centred(
-            target_normal: Vector(x: 0.0, y: 0.0, z: 1.0),
-            source_normal: Vector(x: 0.0, y: 0.0, z: 1.0),
-            target_pos: Vector(x: 0.0, y: 0.0, z: 0.0),
-            source_pos: Vector(x: 0.0, y: 0.0, z: 0.0),
-            target_twist: Vector(x: 1.0, y: 0.0, z: 0.0),
-            source_twist: Vector(x: 0.0, y: 1.0, z: 0.0)
+        def mate = align(
+            planar: meet(frame: Vector(x: 0.0, y: 0.0, z: 1.0), placed: Vector(x: 0.0, y: 0.0, z: 1.0)),
+            translation: meet(frame: Vector(x: 0.0, y: 0.0, z: 0.0), placed: Vector(x: 0.0, y: 0.0, z: 0.0)),
+            rotation: meet(frame: Vector(x: 1.0, y: 0.0, z: 0.0), placed: Vector(x: 1.0, y: 0.0, z: 0.0))
         )
     `;
     const outside = `
         setup { units: "mm", coordinate_system: "Z-up" }
         ${block}
-        def cut = Block() - Block()
+        def cut = Block - Block
     `;
     assert.throws(() => {
         inferSourceEnvironment(outside);
-    }, /Type Inference Error: Operator '-' is only defined inside their join/);
+    }, /Type Inference Error: Operator '-' is only defined for SeatedSolid3D/);
 
-    const nested = `
+    const combined = `
         setup { units: "mm", coordinate_system: "Z-up" }
         ${block}
         ${mate}
-        def cut = join(fixed: Block(), moving: Block(), using: mate) {
-            def body = fixed + moving
-            join(fixed: body, moving: Block(), using: mate) {
-                fixed - moving
-            }
-        }
+        def cut = join(frame: Block, placed: Block, using: frame => placed => mate, combine: frame => placed => (frame + placed) - frame)
     `;
-    const env = inferSourceEnvironment(nested);
-    assert.equal(prune(env.lookup("cut").type).tag, "Component");
+    const env = inferSourceEnvironment(combined);
+    assert.equal(prune(env.lookup("cut").type).tag, "Solid3D");
+
+    const seatedMember = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        ${block}
+        ${mate}
+        def cut = join(frame: Block, placed: Block, using: frame => placed => mate, combine: frame => placed => join(
+            frame: frame + placed,
+            placed: Block,
+            using: frame => placed => mate,
+            combine: frame => placed => frame - placed
+        ))
+    `;
+    assert.throws(() => {
+        inferSourceEnvironment(seatedMember);
+    }, /Type Inference Error: join frame must be a component/);
 
     const crossed = `
         setup { units: "mm", coordinate_system: "Z-up" }
         ${block}
         ${mate}
-        def cut = join(fixed: Block(), moving: Block(), using: mate) {
-            def outer = fixed + moving
-            join(fixed: Block(), moving: Block(), using: mate) {
-                fixed - outer
-            }
-        }
+        def cut = join(frame: Block, placed: Block, using: frame => placed => mate, combine: frame => placed => join(
+            frame: Block,
+            placed: Block,
+            using: frame => placed => mate,
+            combine: frame => placed => frame + placed
+        ) - (frame + placed))
     `;
     assert.throws(() => {
         inferSourceEnvironment(crossed);
-    }, /Type Inference Error: Operator '-' mixes two join domains/);
+    }, /Type Inference Error: Operator '-' is only defined for SeatedSolid3D/);
 
     const numberResult = `
         setup { units: "mm", coordinate_system: "Z-up" }
         ${block}
         ${mate}
-        def cut = join(fixed: Block(), moving: Block(), using: mate) {
-            1.0 - 0.5
-        }
+        def cut = join(frame: Block, placed: Block, using: frame => placed => mate, combine: frame => placed => 1.0 - 0.5)
     `;
     assert.throws(() => {
         inferSourceEnvironment(numberResult);
-    }, /Type Inference Error: A join's result must be that domain or a component/);
+    }, /Type Inference Error: combine is frame => placed => SeatedSolid3D/);
 });
 
 test("A join seats parts by the anchors they expose", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component Outer() {
-            Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))])
-            expose {
+        def Outer = Component(
+            solid: Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]),
+            expose: {
                 up: Vector(x: 0.0, y: 0.0, z: 1.0),
                 right: Vector(x: 1.0, y: 0.0, z: 0.0),
                 cavity: Vector(x: 1.0, y: 1.0, z: 1.0),
                 mating_crosshair: l => Vector(x: 0.0, y: 0.0, z: 0.0)
             }
-        }
-        component Void() {
-            Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))])
-            expose {
+        )
+        def Void = Component(
+            solid: Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]),
+            expose: {
                 up: Vector(x: 0.0, y: 0.0, z: 1.0),
                 right: Vector(x: 1.0, y: 0.0, z: 0.0),
                 seat: Vector(x: 0.0, y: 0.0, z: 0.0)
             }
-        }
-        def cut = join(fixed: Outer(), moving: Void(), using: align(
-            planar: meet(fixed: fixed.up, moving: moving.up),
-            translation: meet(fixed: fixed.cavity, moving: moving.seat),
-            rotation: meet(fixed: fixed.right, moving: moving.right)
-        )) {
-            fixed - moving
-        }
+        )
+        def cut = join(frame: Outer, placed: Void, using: frame => placed => align(
+            planar: meet(frame: frame.up, placed: placed.up),
+            translation: meet(frame: frame.cavity, placed: placed.seat),
+            rotation: meet(frame: frame.right, placed: placed.right)
+        ), combine: frame => placed => frame - placed)
     `;
     const env = inferSourceEnvironment(source);
-    assert.equal(prune(env.lookup("cut").type).tag, "Component");
+    assert.equal(prune(env.lookup("cut").type).tag, "Solid3D");
     const outer = prune(env.lookup("Outer").type);
     assert.equal(outer.tag, "Component");
     if (outer.tag === "Component") assert.deepEqual([...outer.anchors], ["up", "right", "cavity", "mating_crosshair"]);
@@ -383,16 +374,16 @@ test("A join seats parts by the anchors they expose", () => {
 
 test("Member access only reads an exposed anchor", () => {
     const brick = `
-        component Brick() {
-            Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))])
-            expose { seat: Vector(x: 0.0, y: 0.0, z: 0.0) }
-        }
+        def Brick = Component(
+            solid: Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]),
+            expose: { seat: Vector(x: 0.0, y: 0.0, z: 0.0) }
+        )
     `;
     assert.throws(() => {
         inferSourceEnvironment(`
             setup { units: "mm", coordinate_system: "Z-up" }
             ${brick}
-            def missing = Brick().lip
+            def missing = Brick.lip
         `);
     }, /lip is not an anchor on this component/);
 
@@ -400,33 +391,35 @@ test("Member access only reads an exposed anchor", () => {
         inferSourceEnvironment(`
             setup { units: "mm", coordinate_system: "Z-up" }
             ${brick}
-            def mate = centred
-            def cut = join(fixed: Brick(), moving: Brick(), using: mate) {
-                fixed.seat
-            }
+            def mate = align(
+                planar: meet(frame: Vector(x: 0.0, y: 0.0, z: 1.0), placed: Vector(x: 0.0, y: 0.0, z: 1.0)),
+                translation: meet(frame: Vector(x: 0.0, y: 0.0, z: 0.0), placed: Vector(x: 0.0, y: 0.0, z: 0.0)),
+                rotation: meet(frame: Vector(x: 1.0, y: 0.0, z: 0.0), placed: Vector(x: 1.0, y: 0.0, z: 0.0))
+            )
+            def cut = join(frame: Brick, placed: Brick, using: frame => placed => mate, combine: frame => placed => frame.seat)
         `);
     }, /seat is not an anchor on this component/);
 
     assert.throws(() => {
         inferSourceEnvironment(`
             setup { units: "mm", coordinate_system: "Z-up" }
-            component Brick() {
-                Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))])
-                expose {
+            def Brick = Component(
+                solid: Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]),
+                expose: {
                     seat: Vector(x: 0.0, y: 0.0, z: 0.0),
                     seat: Vector(x: 1.0, y: 0.0, z: 0.0)
                 }
-            }
+            )
         `);
     }, /Anchor 'seat' is already exposed/);
 
     assert.throws(() => {
         inferSourceEnvironment(`
             setup { units: "mm", coordinate_system: "Z-up" }
-            component Brick() {
-                Solid3D(faces: [Surface2D(max_u: 1.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))])
-                expose { shell: 1.0 }
-            }
+            def Brick = Component(
+                solid: Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]),
+                expose: { shell: 1.0 }
+            )
         `);
     }, /Type Inference Error: Structural Unification Mismatch/);
 });

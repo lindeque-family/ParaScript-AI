@@ -11,12 +11,12 @@ def head_height = 3.0
 def thread_radius = 1.5
 def overlap = 0.2
 
-component Shaft() {
-    def span = length + overlap
-    Solid3D(faces: [
+def span = length + overlap
+def Shaft = Component(
+    solid: Solid3D(faces: [
         Surface2D(
             max_u: 2.0 * pi,
-            max_v: u => span,
+            min_v: u => 0.0, max_v: u => span,
             formula: u => v => Vector(
                 x: thread_radius * cos(rad: u),
                 y: thread_radius * sin(rad: u),
@@ -25,7 +25,7 @@ component Shaft() {
         ),
         Surface2D(
             max_u: 2.0 * pi,
-            max_v: u => thread_radius,
+            min_v: u => 0.0, max_v: u => thread_radius,
             formula: u => v => Vector(
                 x: v * cos(rad: u),
                 y: v * sin(rad: u),
@@ -34,23 +34,27 @@ component Shaft() {
         ),
         Surface2D(
             max_u: 2.0 * pi,
-            max_v: u => thread_radius,
+            min_v: u => 0.0, max_v: u => thread_radius,
             formula: u => v => Vector(
                 x: v * cos(rad: u),
                 y: v * sin(rad: u),
                 z: span
             )
         )
-    ])
-    expose {}
-}
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        top: Vector(x: 0.0, y: 0.0, z: span)
+    }
+)
 
-component Head() {
-    def radius = head_diameter / 2.0
-    Solid3D(faces: [
+def radius = head_diameter / 2.0
+def Head = Component(
+    solid: Solid3D(faces: [
         Surface2D(
             max_u: 2.0 * pi,
-            max_v: u => head_height,
+            min_v: u => 0.0, max_v: u => head_height,
             formula: u => v => Vector(
                 x: radius * cos(rad: u),
                 y: radius * sin(rad: u),
@@ -59,7 +63,7 @@ component Head() {
         ),
         Surface2D(
             max_u: 2.0 * pi,
-            max_v: u => radius,
+            min_v: u => 0.0, max_v: u => radius,
             formula: u => v => Vector(
                 x: v * cos(rad: u),
                 y: v * sin(rad: u),
@@ -68,22 +72,28 @@ component Head() {
         ),
         Surface2D(
             max_u: 2.0 * pi,
-            max_v: u => radius,
+            min_v: u => 0.0, max_v: u => radius,
             formula: u => v => Vector(
                 x: v * cos(rad: u),
                 y: v * sin(rad: u),
                 z: head_height
             )
         )
-    ])
-    expose {}
-}
-
-component M3Screw() {
-    join(fixed: Head(), moving: Shaft(), using: below(overlap: overlap)) {
-        fixed + moving
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        bottom: Vector(x: 0.0, y: 0.0, z: 0.0)
     }
-    expose {}
-}
+)
 
-export(M3Screw())
+def M3Screw = Component(
+    solid: join(frame: Head, placed: Shaft, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.bottom + Vector(x: 0.0, y: 0.0, z: overlap), placed: placed.top),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {}
+)
+
+export(M3Screw)

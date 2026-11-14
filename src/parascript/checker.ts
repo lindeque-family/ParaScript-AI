@@ -23,26 +23,21 @@ import type {
     ASTNode,
     Program,
     SetupBlock,
-    ComponentDeclaration,
-    ExposeBlock,
-    ExposeProperty,
     ExpressionNode,
     Identifier,
     SmoothOperator,
-    NamedArgumentDeclaration,
     NamedArgument,
     ArrayMatchStatement,
     LambdaExpression
 } from "./ast.js";
 import { unify } from "./unify.js";
 import type { Type } from "./types.js";
-import { createFreshVariable, prune, tAxis, tComponent, tConstraintSet, tCurve1D, tFloat, tMeet, tSolid3D, tString, tSurface2D, tVector, TypeEnvironment, TypeSchema } from "./types.js";
+import { createFreshVariable, prune, tComponent, tConstraintSet, tCurve1D, tFloat, tMeet, tSeatedSolid3D, tSolid3D, tString, tSurface2D, tVector, TypeEnvironment, TypeSchema } from "./types.js";
 
 
 
 export class TypeInferenceEngine {
     private sawExport = false;
-    private nextDomainId = 0;
 
     /**
      * Entry hook validating a full parsed Program AST structure.
@@ -50,7 +45,6 @@ export class TypeInferenceEngine {
      */
     public inferProgram(program: Program): TypeEnvironment {
         this.sawExport = false;
-        this.nextDomainId = 0;
         const globalEnv = this.createStandardLibraryEnvironment();
 
         for (const statement of program.body) {
@@ -74,45 +68,6 @@ export class TypeInferenceEngine {
                 const inferredType = this.inferExpression(node.value as ExpressionNode, env);
                 const schema = this.generalize(inferredType, env);
                 env.extend(node.name.name, schema);
-                break;
-            }
-            case "ComponentDeclaration": {
-                const localEnv = new TypeEnvironment(env);
-
-                // Track standard constructor parameter constraints mapping blocks
-                for (const param of node.parameters) {
-                    const freshVar = createFreshVariable();
-                    localEnv.extend(param.name.name, new TypeSchema([], freshVar));
-                    // Unify to defined nominal parameter expectations safely
-                    unify(freshVar, this.mapAnnotationToType(param.typeAnnotation));
-                }
-
-                for (const bodyStmt of node.body) {
-                    this.inferStatement(bodyStmt, localEnv);
-                }
-
-                const geoType = prune(this.inferExpression(node.rootGeometry, localEnv));
-                if (geoType.tag !== "Solid3D" && geoType.tag !== "Component") {
-                    throw new Error("Type Inference Error: A component root must be a solid or a join of components.");
-                }
-
-                const anchors: string[] = [];
-                const seenAnchors = new Set<string>();
-                for (const property of node.expose.properties) {
-                    if (seenAnchors.has(property.name.name)) {
-                        throw new Error(`Type Inference Error: Anchor '${property.name.name}' is already exposed.`);
-                    }
-                    seenAnchors.add(property.name.name);
-                    anchors.push(property.name.name);
-                    const valueType = prune(this.inferExpression(property.value, localEnv));
-                    if (valueType.tag === "Function") {
-                        unify(valueType.returnType, tVector);
-                    } else {
-                        unify(valueType, tVector);
-                    }
-                }
-
-                env.extend(node.name.name, new TypeSchema([], { tag: "Component", anchors }));
                 break;
             }
             case "ExportStatement": {
@@ -175,18 +130,15 @@ export class TypeInferenceEngine {
                 if (node.operator === "+" || node.operator === "-") {
                     const leftType = prune(left);
                     const rightType = prune(right);
-                    if (leftType.tag === "Domain" && rightType.tag === "Domain") {
-                        if (leftType.id !== rightType.id) {
-                            throw new Error(`Type Inference Error: Operator '${node.operator}' mixes two join domains.`);
-                        }
-                        return leftType;
+                    if (leftType.tag === "SeatedSolid3D" && rightType.tag === "SeatedSolid3D") {
+                        return tSeatedSolid3D;
                     }
                     if (
-                        leftType.tag === "Domain" || rightType.tag === "Domain"
+                        leftType.tag === "SeatedSolid3D" || rightType.tag === "SeatedSolid3D"
                         || leftType.tag === "Component" || rightType.tag === "Component"
                         || leftType.tag === "Solid3D" || rightType.tag === "Solid3D"
                     ) {
-                        throw new Error(`Type Inference Error: Operator '${node.operator}' is only defined inside their join.`);
+                        throw new Error(`Type Inference Error: Operator '${node.operator}' is only defined for SeatedSolid3D.`);
                     }
                 }
 
@@ -224,11 +176,18 @@ export class TypeInferenceEngine {
 
             case "CallExpression": {
                 const calleeType = this.inferExpression(node.callee, env);
+                if (prune(calleeType).tag === "Component") {
+                    throw new Error("Type Inference Error: a component is a value.");
+                }
                 let currentType = calleeType;
 
                 // Process curried evaluations arguments step by step over named slots
                 for (const arg of node.arguments) {
-                    const argType = this.inferExpression(arg.value, env);
+                    const expected = prune(currentType);
+                    const expectedArg = expected.tag === "Function" ? prune(expected.parameter) : undefined;
+                    const argType = arg.value.type === "LambdaExpression" && expectedArg?.tag === "Function"
+                        ? this.inferLambdaAgainst(arg.value, expectedArg, env)
+                        : this.inferExpression(arg.value, env);
                     const freshReturnVar = createFreshVariable();
 
                     // Unification forces verification of BOTH type AND keyword name labels!
@@ -244,33 +203,38 @@ export class TypeInferenceEngine {
             }
 
             case "JoinDomain": {
-                const fixedType = prune(this.inferExpression(node.fixed, env));
-                const movingType = prune(this.inferExpression(node.moving, env));
-                this.expectJoinMember(fixedType, "fixed");
-                this.expectJoinMember(movingType, "moving");
-                // The mate reads the parts' anchors. The body sees only the domain.
-                const mateEnv = new TypeEnvironment(env);
-                mateEnv.extend("fixed", new TypeSchema([], fixedType));
-                mateEnv.extend("moving", new TypeSchema([], movingType));
-                unify(this.inferExpression(node.using, mateEnv), tConstraintSet);
+                const frameType = prune(this.inferExpression(node.frame, env));
+                const placedType = prune(this.inferExpression(node.placed, env));
+                this.expectJoinMember(frameType, "frame");
+                this.expectJoinMember(placedType, "placed");
+                // using is frame => placed => ConstraintSet, so the mate can read these parts' anchors.
+                const usingExpected = this.usingOver(frameType, placedType);
+                const usingType = node.using.type === "LambdaExpression"
+                    ? this.inferLambdaAgainst(node.using, usingExpected, env)
+                    : this.inferExpression(node.using, env);
+                if (prune(usingType).tag !== "Function") {
+                    throw new Error("Type Inference Error: using is frame => placed => ConstraintSet.");
+                }
+                unify(usingType, usingExpected);
 
-                const domain = { tag: "Domain" as const, id: this.nextDomainId++ };
-                const localEnv = new TypeEnvironment(env);
-                localEnv.extend("fixed", new TypeSchema([], domain));
-                localEnv.extend("moving", new TypeSchema([], domain));
-                localEnv.extend("using", new TypeSchema([], tConstraintSet));
-                for (const statement of node.body) {
-                    this.inferStatement(statement, localEnv);
-                }
-                const result = prune(this.inferExpression(node.result, localEnv));
-                if (result.tag === "Domain") {
-                    if (result.id !== domain.id) {
-                        throw new Error("Type Inference Error: A join's result belongs to a different domain.");
+                // combine is SeatedSolid3D => SeatedSolid3D => SeatedSolid3D. The join itself is a Solid3D.
+                const resultVar = createFreshVariable();
+                const combineExpected: Type = {
+                    tag: "Function", paramName: "frame", parameter: tSeatedSolid3D, returnType: {
+                        tag: "Function", paramName: "placed", parameter: tSeatedSolid3D, returnType: resultVar
                     }
-                } else if (result.tag !== "Component") {
-                    throw new Error("Type Inference Error: A join's result must be that domain or a component.");
+                };
+                const combineType = node.combine.type === "LambdaExpression"
+                    ? this.inferLambdaAgainst(node.combine, combineExpected, env)
+                    : this.inferExpression(node.combine, env);
+                if (prune(combineType).tag !== "Function") {
+                    throw new Error("Type Inference Error: combine is frame => placed => SeatedSolid3D.");
                 }
-                return tComponent;
+                unify(combineType, combineExpected);
+                if (prune(resultVar).tag !== "SeatedSolid3D") {
+                    throw new Error("Type Inference Error: combine is frame => placed => SeatedSolid3D.");
+                }
+                return tSolid3D;
             }
 
             case "LambdaExpression": {
@@ -302,12 +266,14 @@ export class TypeInferenceEngine {
 
             case "Surface2DNode": {
                 unify(this.inferExpression(node.maxU, env), tFloat);
-                unify(this.inferExpression(node.maxV, env), {
+                const vBound: Type = {
                     tag: "Function",
                     paramName: "u",
                     parameter: tFloat,
                     returnType: tFloat
-                });
+                };
+                unify(this.inferExpression(node.minV, env), vBound);
+                unify(this.inferExpression(node.maxV, env), vBound);
 
                 const formulaType = this.inferExpression(node.formula, env);
                 unify(formulaType, {
@@ -328,6 +294,29 @@ export class TypeInferenceEngine {
                 const facesType = this.inferExpression(node.faces, env);
                 unify(facesType, { tag: "Array", elementType: tSurface2D });
                 return tSolid3D;
+            }
+
+            case "ComponentExpression": {
+                const solidType = prune(this.inferExpression(node.solid, env));
+                if (solidType.tag !== "Solid3D") {
+                    throw new Error("Type Inference Error: Component solid must be a solid.");
+                }
+                const anchors: string[] = [];
+                const seenAnchors = new Set<string>();
+                for (const property of node.expose.properties) {
+                    if (seenAnchors.has(property.name.name)) {
+                        throw new Error(`Type Inference Error: Anchor '${property.name.name}' is already exposed.`);
+                    }
+                    seenAnchors.add(property.name.name);
+                    anchors.push(property.name.name);
+                    const valueType = prune(this.inferExpression(property.value, env));
+                    if (valueType.tag === "Function") {
+                        unify(valueType.returnType, tVector);
+                    } else {
+                        unify(valueType, tVector);
+                    }
+                }
+                return { tag: "Component", anchors };
             }
 
             case "ArrayMatchStatement": {
@@ -402,18 +391,40 @@ export class TypeInferenceEngine {
         // Standard environment collection scraper logic tracking variables goes here
         return set;
     }
+    private usingOver(frameType: Type, placedType: Type): Type {
+        return {
+            tag: "Function", paramName: "frame", parameter: frameType, returnType: {
+                tag: "Function", paramName: "placed", parameter: placedType, returnType: tConstraintSet
+            }
+        };
+    }
+
+    // A lambda passed where a function is expected is checked with that parameter type,
+    // so using: frame => placed => meet(frame: frame.up, ...) can see each part's anchors.
+    private inferLambdaAgainst(lambda: LambdaExpression, expected: Type, env: TypeEnvironment): Type {
+        if (expected.tag !== "Function") return this.inferExpression(lambda, env);
+        if (lambda.parameter.name !== expected.paramName) {
+            throw new Error(`Type Inference Error: Keyword Argument Mismatch. Expected named parameter identifier '${expected.paramName}', but found key name '${lambda.parameter.name}'.`);
+        }
+        const localEnv = new TypeEnvironment(env);
+        localEnv.extend(lambda.parameter.name, new TypeSchema([], expected.parameter));
+        const expectedReturn = prune(expected.returnType);
+        const bodyType = lambda.body.type === "LambdaExpression" && expectedReturn.tag === "Function"
+            ? this.inferLambdaAgainst(lambda.body, expectedReturn, localEnv)
+            : this.inferExpression(lambda.body, localEnv);
+        unify(bodyType, expected.returnType);
+        return {
+            tag: "Function",
+            paramName: lambda.parameter.name,
+            parameter: expected.parameter,
+            returnType: bodyType
+        };
+    }
+
     private expectJoinMember(value: Type, role: string): void {
         const tag = prune(value).tag;
-        if (tag === "Component" || tag === "Domain") return;
-        throw new Error(`Type Inference Error: join ${role} must be a component or a join domain.`);
-    }
-    private mapAnnotationToType(ann: string): Type {
-        if (ann === "Float") return tFloat;
-        if (ann === "Vector") return tVector;
-        if (ann === "Component") return tComponent;
-        if (ann === "Surface2D") return tSurface2D;
-        if (ann === "Curve1D") return tCurve1D;
-        throw new Error(`Type Inference Error: Unknown nominal type annotation target signature '${ann}'.`);
+        if (tag === "Component") return;
+        throw new Error(`Type Inference Error: join ${role} must be a component.`);
     }
     /**
     * Seeds the global environment scope with clean, keyword-labelled, un-prefixed
@@ -429,63 +440,10 @@ export class TypeInferenceEngine {
                 }
             }
         }));
-        // planar_centred(target_normal: Vector, source_normal: Vector, ...) -> ConstraintSet
-        const planarCentredSignature: Type = {
-            tag: "Function", paramName: "target_normal", parameter: tVector, returnType: {
-                tag: "Function", paramName: "source_normal", parameter: tVector, returnType: {
-                    tag: "Function", paramName: "target_pos", parameter: tVector, returnType: {
-                        tag: "Function", paramName: "source_pos", parameter: tVector, returnType: {
-                            tag: "Function", paramName: "target_twist", parameter: tVector, returnType: {
-                                tag: "Function", paramName: "source_twist", parameter: tVector, returnType: tConstraintSet
-                            }
-                        }
-                    }
-                }
-            }
-        };
-        env.extend("planar_centred", new TypeSchema([], planarCentredSignature));
-
-        // Relative mates. Anchors name a point on a part; distances run along right, forward, and up.
-        env.extend("centre", new TypeSchema([], tString));
-        env.extend("center", new TypeSchema([], tString));
-        env.extend("min", new TypeSchema([], tString));
-        env.extend("max", new TypeSchema([], tString));
-        env.extend("origin", new TypeSchema([], tString));
-        env.extend("centred", new TypeSchema([], tConstraintSet));
-        env.extend("anchor", new TypeSchema([], {
-            tag: "Function", paramName: "fixed", parameter: tString, returnType: {
-                tag: "Function", paramName: "moving", parameter: tString, returnType: {
-                    tag: "Function", paramName: "by", parameter: tFloat, returnType: tAxis
-                }
-            }
-        }));
-        env.extend("relate", new TypeSchema([], {
-            tag: "Function", paramName: "right", parameter: tAxis, returnType: {
-                tag: "Function", paramName: "forward", parameter: tAxis, returnType: {
-                    tag: "Function", paramName: "up", parameter: tAxis, returnType: tConstraintSet
-                }
-            }
-        }));
-        env.extend("inset", new TypeSchema([], {
-            tag: "Function", paramName: "by", parameter: tFloat, returnType: tConstraintSet
-        }));
-        env.extend("apart", new TypeSchema([], {
-            tag: "Function", paramName: "right", parameter: tFloat, returnType: {
-                tag: "Function", paramName: "forward", parameter: tFloat, returnType: {
-                    tag: "Function", paramName: "up", parameter: tFloat, returnType: tConstraintSet
-                }
-            }
-        }));
-        env.extend("on_top", new TypeSchema([], {
-            tag: "Function", paramName: "overlap", parameter: tFloat, returnType: tConstraintSet
-        }));
-        env.extend("below", new TypeSchema([], {
-            tag: "Function", paramName: "overlap", parameter: tFloat, returnType: tConstraintSet
-        }));
         // align: planar (normals), then translation (points), then rotation in that plane.
         env.extend("meet", new TypeSchema([], {
-            tag: "Function", paramName: "fixed", parameter: tVector, returnType: {
-                tag: "Function", paramName: "moving", parameter: tVector, returnType: tMeet
+            tag: "Function", paramName: "frame", parameter: tVector, returnType: {
+                tag: "Function", paramName: "placed", parameter: tVector, returnType: tMeet
             }
         }));
         env.extend("align", new TypeSchema([], {

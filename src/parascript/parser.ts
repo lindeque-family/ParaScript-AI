@@ -4,7 +4,7 @@
 
 export type TokenType =
 
-    | "SETUP" | "PARAM" | "DEF" | "FN" | "COMPONENT" | "EXPORT" | "EXPOSE" | "RETURN" | "TRUE" | "FALSE"
+    | "SETUP" | "PARAM" | "DEF" | "FN" | "EXPORT" | "RETURN" | "TRUE" | "FALSE"
     | "MATCH" | "IDENTIFIER" | "FLOAT" | "STRING"
     | "EQUALS" | "PIPE" | "ARROW" | "COLON" | "CONS" | "COMMA" | "DOT"
     | "PLUS" | "MINUS" | "STAR" | "SLASH" | "CARET"
@@ -22,14 +22,13 @@ import type {
     ASTNode,
     Program,
     SetupBlock,
-    ComponentDeclaration,
+    ComponentExpression,
     ExportStatement,
     ExposeBlock,
     ExposeProperty,
     ExpressionNode,
     Identifier,
     SmoothOperator,
-    NamedArgumentDeclaration,
     NamedArgument,
     ArrayMatchStatement,
     Curve1DNode,
@@ -154,7 +153,7 @@ export class Lexer {
 
                 const keywordMap: Record<string, TokenType> = {
                     setup: "SETUP", param: "PARAM", def: "DEF", fn: "FN",
-                    component: "COMPONENT", export: "EXPORT", expose: "EXPOSE", return: "RETURN",
+                    export: "EXPORT", return: "RETURN",
                     true: "TRUE", false: "FALSE", match: "MATCH"
                 };
 
@@ -267,9 +266,6 @@ export class Parser {
             const value = this.parseExpression();
             return { type: "VariableDeclaration", name, value: value as any };
         }
-        if (tok.type === "COMPONENT") {
-            return this.parseComponentDeclaration();
-        }
         if (tok.type === "EXPORT") {
             return this.parseExportStatement();
         }
@@ -282,51 +278,35 @@ export class Parser {
         this.consume("RPAREN", "Expected ')' after the exported value.");
         return { type: "ExportStatement", value };
     }
-    private parseComponentDeclaration(): ComponentDeclaration {
-        this.advance(); // consume component keyword
-        const name = this.parseIdentifier();
-        this.consume("LPAREN", "Expected open parameter envelope '(' for component mapping.");
-        const parameters: Array<NamedArgumentDeclaration> = [];
+    private parseComponentExpression(): ComponentExpression {
+        this.consume("LPAREN", "Expected '(' after Component.");
+        let solid: ExpressionNode | null = null;
+        let expose: ExposeBlock | null = null;
         while (this.peek().type !== "RPAREN" && this.peek().type !== "EOF") {
-            const pName = this.parseIdentifier();
-            this.consume("COLON", "Expected ':' type notation splitter.");
-            const tAnnot = this.consume("IDENTIFIER", "Expected explicit nominal topological type token.").value;
-            parameters.push({
-                type: "NamedArgument",
-                name: pName,
-                typeAnnotation: tAnnot as any
-            });
+            const nameTok = this.consume("IDENTIFIER", "Expected a Component argument name.");
+            this.consume("COLON", "Expected named argument designation operator ':'.");
+            if (nameTok.value === "solid" && !solid) {
+                solid = this.parseExpression();
+            } else if (nameTok.value === "expose" && !expose) {
+                if (this.peek().type !== "LBRACE") {
+                    const tok = this.peek();
+                    throw new Error(`Parser Error: Component expose is a block of anchors. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
+                }
+                expose = this.parseAnchorBlock();
+            } else {
+                throw new Error(`Parser Error: Component accepts solid and expose. (Found '${nameTok.value}' at line ${nameTok.line}, col ${nameTok.char})`);
+            }
             if (this.peek().type === "COMMA") this.advance();
         }
-        this.consume("RPAREN", "Expected close parameter layout block ')'.");
-        this.consume("LBRACE", "Expected open structural block token '{'.");
-        const body: Array<ASTNode> = [];
-        let rootGeometry: ExpressionNode | null = null;
-        let expose: ExposeBlock | null = null;
-        while (this.peek().type !== "RBRACE" && this.peek().type !== "EOF") {
-            if (this.peek().type === "EXPOSE") {
-                expose = this.parseExposeBlock();
-            } else if (
-                this.peek().type === "IDENTIFIER" &&
-                ["Solid3D", "Cube", "Sphere", "Surface2D", "Curve1D", "join"].includes(this.peek().value)
-            ) {
-                rootGeometry = this.parseExpression();
-            } else {
-                body.push(this.parseStructuralStatement());
-            }
+        this.consume("RPAREN", "Expected ')' after Component arguments.");
+        if (!solid || !expose) {
+            const tok = this.peek();
+            throw new Error(`Parser Error: Component needs solid and expose. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
         }
-        this.consume("RBRACE", "Expected close structural envelope block '}'.");
-        if (!rootGeometry) {
-            throw new Error("Parser Error: Components must evaluate exactly one active baseline geometry root node.");
-        }
-        if (!expose) {
-            throw new Error("Parser Error: Components must export an explicit 'expose' interface block layout.");
-        }
-        return { type: "ComponentDeclaration", name, parameters, body, rootGeometry, expose };
+        return { type: "ComponentExpression", solid, expose };
     }
-    private parseExposeBlock(): ExposeBlock {
-        this.advance();
-        this.consume("LBRACE", "Expected open bracket '{' for interface exposure properties.");
+    private parseAnchorBlock(): ExposeBlock {
+        this.consume("LBRACE", "Expected '{' to open the expose block.");
         const properties: Array<ExposeProperty> = [];
         while (this.peek().type !== "RBRACE" && this.peek().type !== "EOF") {
             const name = this.parseIdentifier();
@@ -335,7 +315,7 @@ export class Parser {
             properties.push({ type: "ExposeProperty", name, value });
             if (this.peek().type === "COMMA") this.advance();
         }
-        this.consume("RBRACE", "Expected close block '}' for exposed properties.");
+        this.consume("RBRACE", "Expected '}' to close the expose block.");
         return { type: "ExposeBlock", properties };
     }
     private parseExpression(): ExpressionNode {
@@ -413,6 +393,16 @@ export class Parser {
             return this.parseArrayMatchExpression();
         }
         if (tok.type === "IDENTIFIER") {
+            if (tok.value === "Component") {
+                this.advance();
+                if (this.peek().type === "LPAREN") return this.parseComponentExpression();
+                const id: Identifier = { type: "Identifier", name: "Component" };
+                if (this.peek().type === "ARROW") {
+                    this.advance();
+                    return { type: "LambdaExpression", parameter: id, body: this.parseExpression() };
+                }
+                return id;
+            }
             if (tok.value === "join") {
                 this.advance();
                 if (this.peek().type === "LPAREN") return this.parseJoinDomain();
@@ -485,53 +475,29 @@ export class Parser {
     }
     private parseJoinDomain(): JoinDomain {
         this.consume("LPAREN", "Expected '(' after join.");
-        let fixed: ExpressionNode | null = null;
-        let moving: ExpressionNode | null = null;
+        let frame: ExpressionNode | null = null;
+        let placed: ExpressionNode | null = null;
         let using: ExpressionNode | null = null;
+        let combine: ExpressionNode | null = null;
         while (this.peek().type !== "RPAREN" && this.peek().type !== "EOF") {
             const nameTok = this.consume("IDENTIFIER", "Expected a join argument name.");
             this.consume("COLON", "Expected named argument designation operator ':'.");
             const value = this.parseExpression();
-            if (nameTok.value === "fixed" && !fixed) fixed = value;
-            else if (nameTok.value === "moving" && !moving) moving = value;
+            if (nameTok.value === "frame" && !frame) frame = value;
+            else if (nameTok.value === "placed" && !placed) placed = value;
             else if (nameTok.value === "using" && !using) using = value;
+            else if (nameTok.value === "combine" && !combine) combine = value;
             else {
-                throw new Error(`Parser Error: join accepts fixed, moving, and using. (Found '${nameTok.value}' at line ${nameTok.line}, col ${nameTok.char})`);
+                throw new Error(`Parser Error: join accepts frame, placed, using, and combine. (Found '${nameTok.value}' at line ${nameTok.line}, col ${nameTok.char})`);
             }
             if (this.peek().type === "COMMA") this.advance();
         }
         this.consume("RPAREN", "Expected ')' after join arguments.");
-        if (!fixed || !moving || !using) {
+        if (!frame || !placed || !using || !combine) {
             const tok = this.peek();
-            throw new Error(`Parser Error: join needs fixed, moving, and using. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
+            throw new Error(`Parser Error: join needs frame, placed, using, and combine. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
         }
-        if (this.peek().type !== "LBRACE") {
-            const tok = this.peek();
-            throw new Error(`Parser Error: join domain needs a body. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
-        }
-        this.advance();
-        const body: Array<ASTNode> = [];
-        let result: ExpressionNode | null = null;
-        while (this.peek().type !== "RBRACE" && this.peek().type !== "EOF") {
-            const kind = this.peek().type;
-            if (kind === "DEF" || kind === "PARAM" || kind === "COMPONENT" || kind === "EXPORT") {
-                body.push(this.parseStructuralStatement());
-                continue;
-            }
-            const expr = this.parseExpression();
-            if (this.peek().type === "RBRACE" || this.peek().type === "EOF") {
-                result = expr;
-                break;
-            }
-            body.push(expr);
-        }
-        if (!result) {
-            const tok = this.peek();
-            const message = body.length === 0 ? "join domain needs a body" : "join domain needs a result";
-            throw new Error(`Parser Error: ${message}. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
-        }
-        this.consume("RBRACE", "Expected '}' to close the join domain.");
-        return { type: "JoinDomain", fixed, moving, using, body, result };
+        return { type: "JoinDomain", frame, placed, using, combine };
     }
     private parseArrayMatchExpression(): ArrayMatchStatement {
         this.consume("MATCH", "Expected 'match' keyword initiation sequence.");
@@ -577,21 +543,28 @@ export class Parser {
     private parseSurface2DNode(): Surface2DNode {
         this.consume("LPAREN", "Expected open parameter envelope tracking Surface2D generation constraints.");
         let maxU: ExpressionNode | null = null;
+        let minV: LambdaExpression | null = null;
         let maxV: LambdaExpression | null = null;
         let formula: LambdaExpression | null = null;
         while (this.peek().type !== "RPAREN" && this.peek().type !== "EOF") {
-            const key = this.consume("IDENTIFIER", "Expected variable mapping key in Surface2D initialization.").value;
+            const keyTok = this.consume("IDENTIFIER", "Expected variable mapping key in Surface2D initialization.");
+            const key = keyTok.value;
             this.consume("COLON", "Expected ':' parameter split notation mapping.");
             if (key === "max_u") maxU = this.parseExpression();
+            else if (key === "min_v") minV = this.parseExpression() as LambdaExpression;
             else if (key === "max_v") maxV = this.parseExpression() as LambdaExpression;
             else if (key === "formula") formula = this.parseExpression() as LambdaExpression;
+            else {
+                throw new Error(`Parser Error: Surface2D accepts max_u, min_v, max_v, and formula. (Found '${key}' at line ${keyTok.line}, col ${keyTok.char})`);
+            }
             if (this.peek().type === "COMMA") this.advance();
         }
         this.consume("RPAREN", "Expected close envelope layout bounding surface parameters.");
-        if (!maxU || !maxV || !formula) {
-            throw new Error("Parser Error: Surface2D primitives require fields mapping 'max_u', a dynamic 'max_v' lambda boundary region function, and a continuous spatial mapping 'formula' equation logic.");
+        if (!maxU || !minV || !maxV || !formula) {
+            const tok = this.peek();
+            throw new Error(`Parser Error: Surface2D needs max_u, min_v, max_v, and formula. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
         }
-        return { type: "Surface2DNode", maxU, maxV, formula };
+        return { type: "Surface2DNode", maxU, minV, maxV, formula };
     }
     private parseSolid3DNode(): Solid3DNode {
         this.consume("LPAREN", "Expected open parenthesis for Solid3D specification.");

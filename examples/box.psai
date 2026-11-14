@@ -13,56 +13,55 @@ def d = 50.0
 def h = 30.0
 def wall = 3.0
 
-component Outer() {
-    Solid3D(faces: [
-        Surface2D(max_u: w, max_v: u => d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
-        Surface2D(max_u: w, max_v: u => d, formula: u => v => Vector(x: u, y: v, z: h)),
-        Surface2D(max_u: w, max_v: u => h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
-        Surface2D(max_u: w, max_v: u => h, formula: u => v => Vector(x: u, y: d, z: v)),
-        Surface2D(max_u: d, max_v: u => h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
-        Surface2D(max_u: d, max_v: u => h, formula: u => v => Vector(x: w, y: u, z: v))
-    ])
-    expose {
+def Outer = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: w, min_v: u => 0.0, max_v: u => d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: w, min_v: u => 0.0, max_v: u => d, formula: u => v => Vector(x: u, y: v, z: h)),
+        Surface2D(max_u: w, min_v: u => 0.0, max_v: u => h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: w, min_v: u => 0.0, max_v: u => h, formula: u => v => Vector(x: u, y: d, z: v)),
+        Surface2D(max_u: d, min_v: u => 0.0, max_v: u => h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: d, min_v: u => 0.0, max_v: u => h, formula: u => v => Vector(x: w, y: u, z: v))
+    ]),
+    expose: {
         up: Vector(x: 0.0, y: 0.0, z: 1.0),
         right: Vector(x: 1.0, y: 0.0, z: 0.0),
         cavity: Vector(x: wall, y: wall, z: wall)
     }
-}
+)
 
-component Void() {
-    def inner_w = w - (wall * 2.0)
-    def inner_d = d - (wall * 2.0)
-    def inner_h = h
-    Solid3D(faces: [
-        Surface2D(max_u: inner_w, max_v: u => inner_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
-        Surface2D(max_u: inner_w, max_v: u => inner_d, formula: u => v => Vector(x: u, y: v, z: inner_h)),
-        Surface2D(max_u: inner_w, max_v: u => inner_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
-        Surface2D(max_u: inner_w, max_v: u => inner_h, formula: u => v => Vector(x: u, y: inner_d, z: v)),
-        Surface2D(max_u: inner_d, max_v: u => inner_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
-        Surface2D(max_u: inner_d, max_v: u => inner_h, formula: u => v => Vector(x: inner_w, y: u, z: v))
-    ])
-    expose {
+def inner_w = w - (wall * 2.0)
+def inner_d = d - (wall * 2.0)
+def inner_h = h
+def Void = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: inner_w, min_v: u => 0.0, max_v: u => inner_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: inner_w, min_v: u => 0.0, max_v: u => inner_d, formula: u => v => Vector(x: u, y: v, z: inner_h)),
+        Surface2D(max_u: inner_w, min_v: u => 0.0, max_v: u => inner_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: inner_w, min_v: u => 0.0, max_v: u => inner_h, formula: u => v => Vector(x: u, y: inner_d, z: v)),
+        Surface2D(max_u: inner_d, min_v: u => 0.0, max_v: u => inner_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: inner_d, min_v: u => 0.0, max_v: u => inner_h, formula: u => v => Vector(x: inner_w, y: u, z: v))
+    ]),
+    expose: {
         up: Vector(x: 0.0, y: 0.0, z: 1.0),
         right: Vector(x: 1.0, y: 0.0, z: 0.0),
         seat: Vector(x: 0.0, y: 0.0, z: 0.0)
     }
-}
+)
 
-component HollowBox() {
-    join(
-        fixed: Outer(),
-        moving: Void(),
-        using: align(
-            planar: meet(fixed: fixed.up, moving: moving.up),
-            translation: meet(fixed: fixed.cavity, moving: moving.seat),
-            rotation: meet(fixed: fixed.right, moving: moving.right)
-        )
-    ) {
-        fixed - moving
-    }
-    expose {
+def HollowBox = Component(
+    solid: join(
+        frame: Outer,
+        placed: Void,
+        using: frame => placed => align(
+            planar: meet(frame: frame.up, placed: placed.up),
+            translation: meet(frame: frame.cavity, placed: placed.seat),
+            rotation: meet(frame: frame.right, placed: placed.right)
+        ),
+        combine: frame => placed => frame - placed
+    ),
+    expose: {
         origin: Vector(x: w / 2.0, y: d / 2.0, z: h / 2.0)
     }
-}
+)
 
-export(HollowBox())
+export(HollowBox)

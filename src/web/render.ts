@@ -30,6 +30,14 @@ interface ScreenTriangle {
 }
 
 export const SHAPE_EDGE = "#16202b";
+
+type ViewName = "top" | "bottom" | "front" | "back" | "left" | "right";
+
+interface ViewFace {
+    readonly name: ViewName;
+    readonly normal: Vec3;
+    readonly corners: readonly [Vec3, Vec3, Vec3, Vec3];
+}
 // The eye sits this many model-radii back. Near axis tips grow and far ones shrink.
 export const PERSPECTIVE_EYE = 2.75;
 // A nearer surface hides an edge. The bias keeps the crease on the front face.
@@ -41,8 +49,15 @@ export class ManifoldViewport {
     private angleX = 0.6;
     private angleY = 0.7;
     private dragging = false;
+    private panning = false;
+    private panX = 0;
+    private panY = 0;
+    private hoverView: ViewName | null = null;
     private previousX = 0;
     private previousY = 0;
+    private camRight: Vec3 = { x: 1, y: 0, z: 0 };
+    private camUp: Vec3 = { x: 0, y: 1, z: 0 };
+    private camForward: Vec3 = { x: 0, y: 0, z: 1 };
     private radius = 1;
     private scale = 1;
     private solid = false;
@@ -51,10 +66,6 @@ export class ManifoldViewport {
     private pixelRatio = 1;
     private eyeDistance = PERSPECTIVE_EYE;
     private depth: Float32Array = new Float32Array(0);
-    private cosX = Math.cos(0.6);
-    private sinX = Math.sin(0.6);
-    private cosY = Math.cos(0.7);
-    private sinY = Math.sin(0.7);
     private drawScheduled = false;
 
     constructor(private readonly canvas: HTMLCanvasElement) {
@@ -63,21 +74,56 @@ export class ManifoldViewport {
             throw new Error("2D canvas context unavailable.");
         }
         this.ctx = ctx;
+        this.orientFromAngles();
         canvas.addEventListener("mousedown", (event) => {
-            this.dragging = true;
             this.previousX = event.clientX;
             this.previousY = event.clientY;
+            if (event.button === 1) {
+                this.panning = true;
+                this.setCursor("grabbing");
+                event.preventDefault();
+                return;
+            }
+            if (event.button !== 0) return;
+            const face = this.hitViewCube(this.pointer(event));
+            if (face) {
+                this.snapView(face.name);
+                return;
+            }
+            this.dragging = true;
+            this.setCursor("grabbing");
         });
         window.addEventListener("mouseup", () => {
             this.dragging = false;
+            this.panning = false;
+            this.setCursor(this.hoverView ? "pointer" : "default");
         });
         canvas.addEventListener("mousemove", (event) => {
-            if (!this.dragging) return;
-            this.angleY += (event.clientX - this.previousX) * 0.01;
-            this.angleX += (event.clientY - this.previousY) * 0.01;
-            this.previousX = event.clientX;
-            this.previousY = event.clientY;
-            this.scheduleDraw();
+            if (this.panning) {
+                const scale = this.pointerScale();
+                this.panX += (event.clientX - this.previousX) * scale.x;
+                this.panY += (event.clientY - this.previousY) * scale.y;
+                this.previousX = event.clientX;
+                this.previousY = event.clientY;
+                this.scheduleDraw();
+                return;
+            }
+            if (this.dragging) {
+                const dx = event.clientX - this.previousX;
+                const dy = event.clientY - this.previousY;
+                this.previousX = event.clientX;
+                this.previousY = event.clientY;
+                this.orbit(dx, dy);
+                this.scheduleDraw();
+                return;
+            }
+            const face = this.hitViewCube(this.pointer(event));
+            const next = face?.name ?? null;
+            if (next !== this.hoverView) {
+                this.hoverView = next;
+                this.setCursor(next ? "pointer" : "default");
+                this.scheduleDraw();
+            }
         });
         canvas.addEventListener("wheel", (event) => {
             event.preventDefault();
@@ -141,14 +187,48 @@ export class ManifoldViewport {
         return max > 0 ? max : 1;
     }
 
+    private orientFromAngles(): void {
+        const cosX = Math.cos(this.angleX);
+        const sinX = Math.sin(this.angleX);
+        const cosY = Math.cos(this.angleY);
+        const sinY = Math.sin(this.angleY);
+        this.camRight = { x: cosY, y: 0, z: -sinY };
+        this.camUp = { x: -sinX * sinY, y: cosX, z: -sinX * cosY };
+        this.camForward = { x: sinY * cosX, y: sinX, z: cosY * cosX };
+    }
+
     private cameraOf(x: number, y: number, z: number): Vec3 {
-        const x1 = x * this.cosY - z * this.sinY;
-        const z1 = x * this.sinY + z * this.cosY;
         return {
-            x: x1,
-            y: y * this.cosX - z1 * this.sinX,
-            z: y * this.sinX + z1 * this.cosX
+            x: x * this.camRight.x + y * this.camRight.y + z * this.camRight.z,
+            y: x * this.camUp.x + y * this.camUp.y + z * this.camUp.z,
+            z: x * this.camForward.x + y * this.camForward.y + z * this.camForward.z
         };
+    }
+
+    private orbit(dx: number, dy: number): void {
+        const right = this.camRight;
+        const up = this.camUp;
+        // Screen axes, same feel as the old yaw and pitch: drag right swings +X left, drag down swings +Z down.
+        if (dx !== 0) this.turn(up, dx * 0.01);
+        if (dy !== 0) this.turn(right, -dy * 0.01);
+        this.orthonormalize();
+    }
+
+    private turn(axis: Vec3, angle: number): void {
+        this.camRight = rotateAround(this.camRight, axis, angle);
+        this.camUp = rotateAround(this.camUp, axis, angle);
+        this.camForward = rotateAround(this.camForward, axis, angle);
+    }
+
+    private orthonormalize(): void {
+        this.camForward = unitVec(this.camForward);
+        const upDot = dotVec(this.camUp, this.camForward);
+        this.camUp = unitVec({
+            x: this.camUp.x - this.camForward.x * upDot,
+            y: this.camUp.y - this.camForward.y * upDot,
+            z: this.camUp.z - this.camForward.z * upDot
+        });
+        this.camRight = crossVec(this.camUp, this.camForward);
     }
 
     private perspectiveScale(depth: number): number {
@@ -162,8 +242,8 @@ export class ManifoldViewport {
         const camera = this.cameraOf(x, y, z);
         const perspective = this.perspectiveScale(camera.z);
         return {
-            x: this.canvas.width / 2 + camera.x * this.scale * perspective,
-            y: this.canvas.height / 2 - camera.y * this.scale * perspective,
+            x: this.canvas.width / 2 + camera.x * this.scale * perspective + this.panX,
+            y: this.canvas.height / 2 - camera.y * this.scale * perspective + this.panY,
             depth: camera.z
         };
     }
@@ -200,10 +280,6 @@ export class ManifoldViewport {
     private draw(): void {
         const { ctx, canvas } = this;
         if (canvas.width === 0 || canvas.height === 0) return;
-        this.cosX = Math.cos(this.angleX);
-        this.sinX = Math.sin(this.angleX);
-        this.cosY = Math.cos(this.angleY);
-        this.sinY = Math.sin(this.angleY);
         const span = Math.min(canvas.width, canvas.height);
         this.eyeDistance = this.radius * PERSPECTIVE_EYE;
         this.scale = (span * 0.42 * this.zoom) / this.radius;
@@ -211,6 +287,168 @@ export class ManifoldViewport {
         this.drawGrid();
         this.drawMesh();
         this.drawAxes();
+        this.drawViewCube();
+    }
+
+    private pointerScale(): { x: number; y: number } {
+        const cssW = this.canvas.clientWidth || this.canvas.width || 1;
+        const cssH = this.canvas.clientHeight || this.canvas.height || 1;
+        return { x: this.canvas.width / cssW, y: this.canvas.height / cssH };
+    }
+
+    private pointer(event: MouseEvent): { x: number; y: number } {
+        const scale = this.pointerScale();
+        return { x: event.offsetX * scale.x, y: event.offsetY * scale.y };
+    }
+
+    private setCursor(cursor: string): void {
+        if (!this.canvas.style) return;
+        this.canvas.style.cursor = cursor;
+    }
+
+    // Top looks down the up axis. Front looks at the forward face. Screen up stays the part's up,
+    // except on top and bottom, where forward takes that job so the view is not mirrored.
+    private snapView(name: ViewName): void {
+        const { right, forward, up } = this.partAxes();
+        if (name === "top") {
+            this.camRight = right;
+            this.camUp = scaleVec(forward, -1);
+            this.camForward = scaleVec(up, -1);
+        } else if (name === "bottom") {
+            this.camRight = right;
+            this.camUp = forward;
+            this.camForward = up;
+        } else if (name === "front") {
+            this.camRight = right;
+            this.camUp = up;
+            this.camForward = scaleVec(forward, -1);
+        } else if (name === "back") {
+            this.camRight = scaleVec(right, -1);
+            this.camUp = up;
+            this.camForward = forward;
+        } else if (name === "right") {
+            this.camRight = scaleVec(forward, -1);
+            this.camUp = up;
+            this.camForward = scaleVec(right, -1);
+        } else {
+            this.camRight = forward;
+            this.camUp = up;
+            this.camForward = right;
+        }
+        this.panX = 0;
+        this.panY = 0;
+        this.scheduleDraw();
+    }
+
+    private viewName(normal: Vec3): ViewName {
+        const { right, forward, up } = this.partAxes();
+        const upDot = dotVec(normal, up);
+        const forwardDot = dotVec(normal, forward);
+        const rightDot = dotVec(normal, right);
+        const aUp = Math.abs(upDot);
+        const aForward = Math.abs(forwardDot);
+        const aRight = Math.abs(rightDot);
+        if (aUp >= aForward && aUp >= aRight) return upDot > 0 ? "top" : "bottom";
+        if (aForward >= aRight) return forwardDot > 0 ? "front" : "back";
+        return rightDot > 0 ? "right" : "left";
+    }
+
+    private viewLabel(name: ViewName): string {
+        if (name === "top") return "Top";
+        if (name === "bottom") return "Bottom";
+        if (name === "front") return "Front";
+        if (name === "back") return "Back";
+        if (name === "right") return "Right";
+        return "Left";
+    }
+
+    private viewFaces(): readonly ViewFace[] {
+        const normals: readonly Vec3[] = [
+            { x: 1, y: 0, z: 0 },
+            { x: -1, y: 0, z: 0 },
+            { x: 0, y: 1, z: 0 },
+            { x: 0, y: -1, z: 0 },
+            { x: 0, y: 0, z: 1 },
+            { x: 0, y: 0, z: -1 }
+        ];
+        return normals.map((normal) => ({
+            name: this.viewName(normal),
+            normal,
+            corners: faceCorners(normal)
+        }));
+    }
+
+    private widgetProject(point: Vec3): CameraPoint {
+        const camera = this.cameraOf(point.x, point.y, point.z);
+        const px = this.pixelRatio;
+        const size = 26 * px;
+        const originX = this.canvas.width - 68 * px;
+        const originY = 58 * px;
+        const perspective = 4 / (4 + camera.z);
+        return {
+            x: originX + camera.x * size * perspective,
+            y: originY - camera.y * size * perspective,
+            depth: camera.z
+        };
+    }
+
+    private hitViewCube(point: { x: number; y: number }): ViewFace | null {
+        let best: ViewFace | null = null;
+        let bestDepth = Infinity;
+        for (const face of this.viewFaces()) {
+            const facing = this.cameraOf(face.normal.x, face.normal.y, face.normal.z).z;
+            if (facing > 0.05) continue;
+            const [a, b, c, d] = face.corners.map((corner) => this.widgetProject(corner));
+            if (!a || !b || !c || !d) continue;
+            const depth = this.widgetProject(face.normal).depth;
+            if (!pointInTri(point, a, b, c) && !pointInTri(point, a, c, d)) continue;
+            if (depth < bestDepth) {
+                best = face;
+                bestDepth = depth;
+            }
+        }
+        return best;
+    }
+
+    private drawViewCube(): void {
+        const { ctx } = this;
+        const faces = [...this.viewFaces()].sort((left, right) => {
+            return this.widgetProject(right.normal).depth - this.widgetProject(left.normal).depth;
+        });
+        ctx.save();
+        ctx.globalAlpha = 1;
+        const px = this.pixelRatio;
+        ctx.font = `${10 * px}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.lineWidth = 1.25 * px;
+        ctx.lineJoin = "round";
+        for (const face of faces) {
+            const facing = this.cameraOf(face.normal.x, face.normal.y, face.normal.z).z;
+            if (facing > 0.05) continue;
+            const projected = face.corners.map((corner) => this.widgetProject(corner));
+            const [a, b, c, d] = projected;
+            if (!a || !b || !c || !d) continue;
+            const shade = this.faceShade(face.normal);
+            const lift = face.name === this.hoverView ? 40 : 0;
+            const channel = (value: number): number => Math.min(255, value + lift);
+            ctx.strokeStyle = face.name === this.hoverView ? "#d6e9ff" : "#1b242e";
+            ctx.fillStyle = `rgb(${channel(shade[0])}, ${channel(shade[1])}, ${channel(shade[2])})`;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.lineTo(c.x, c.y);
+            ctx.lineTo(d.x, d.y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            if (facing < -0.35) {
+                const label = this.widgetProject(face.normal);
+                ctx.fillStyle = "#f4f7fb";
+                ctx.fillText(this.viewLabel(face.name), label.x, label.y);
+            }
+        }
+        ctx.restore();
     }
 
     private drawGrid(): void {
@@ -599,6 +837,48 @@ function quantizeNormal(v: Vec3): Vec3 {
 
 function dotVec(a: Vec3, b: Vec3): number {
     return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+function crossVec(a: Vec3, b: Vec3): Vec3 {
+    return {
+        x: a.y * b.z - a.z * b.y,
+        y: a.z * b.x - a.x * b.z,
+        z: a.x * b.y - a.y * b.x
+    };
+}
+
+function rotateAround(v: Vec3, axis: Vec3, angle: number): Vec3 {
+    const k = unitVec(axis);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const along = dotVec(v, k);
+    const crossed = crossVec(k, v);
+    return {
+        x: v.x * cos + crossed.x * sin + k.x * along * (1 - cos),
+        y: v.y * cos + crossed.y * sin + k.y * along * (1 - cos),
+        z: v.z * cos + crossed.z * sin + k.z * along * (1 - cos)
+    };
+}
+
+function faceCorners(normal: Vec3): [Vec3, Vec3, Vec3, Vec3] {
+    const tangent = Math.abs(normal.x) < 0.5 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+    const u = unitVec(crossVec(normal, tangent));
+    const v = crossVec(normal, u);
+    const corner = (su: number, sv: number): Vec3 => ({
+        x: normal.x + u.x * su + v.x * sv,
+        y: normal.y + u.y * su + v.y * sv,
+        z: normal.z + u.z * su + v.z * sv
+    });
+    return [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)];
+}
+
+function pointInTri(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): boolean {
+    const area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    if (Math.abs(area) < 1e-6) return false;
+    const w0 = ((b.x - p.x) * (c.y - p.y) - (b.y - p.y) * (c.x - p.x)) / area;
+    const w1 = ((c.x - p.x) * (a.y - p.y) - (c.y - p.y) * (a.x - p.x)) / area;
+    const w2 = 1 - w0 - w1;
+    return w0 >= -0.02 && w1 >= -0.02 && w2 >= -0.02;
 }
 
 function frameLight(right: Vec3, forward: Vec3, up: Vec3, rightScale: number, forwardScale: number, upScale: number): Vec3 {

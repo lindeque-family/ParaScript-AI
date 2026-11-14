@@ -7,7 +7,7 @@ import { test } from "node:test";
 // @ts-ignore -- Node.js type declarations are optional in this project.
 import assert from "node:assert/strict";
 import { Parser } from "./parser.js"; 
-import type { ComponentDeclaration, VariableDeclaration } from "./ast.js";
+import type { ComponentExpression, VariableDeclaration } from "./ast.js";
 
 test("Global Setup Block Parsing", () => {
     const source = `
@@ -45,28 +45,23 @@ test("Variable Declaration and Curried Lambda Trajectories", () => {
     assert.equal(decl.value.formula.parameter.name, "t");
 });
 
-test("Component Type Blueprint Construction and Interface Exposure", () => {
+test("component returns a part and publishes its anchors", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component CustomShaft(length: Float) {
-            def profile_radius = 5.0
-            Solid3D(faces: [Cube(size: 1.0)])
-            expose {
+        def CustomShaft = Component(
+            solid: Solid3D(faces: [Cube(size: 1.0)]),
+            expose: {
                 mating_crosshair: l => Vector(x: 0.0, y: 0.0, z: 0.0)
             }
-        }
+        )
     `;
     const parser = new Parser(source);
     const ast = parser.parse();
-    const comp = ast.body[0] as ComponentDeclaration;
+    const decl = ast.body[0] as VariableDeclaration;
+    const comp = decl.value as ComponentExpression;
 
-    assert.equal(comp.type, "ComponentDeclaration");
-    assert.equal(comp.name.name, "CustomShaft");
-    
-    const firstParam = comp.parameters[0];
-    assert.ok(firstParam);
-    assert.equal(firstParam.name.name, "length");
-
+    assert.equal(comp.type, "ComponentExpression");
+    assert.equal(comp.solid.type, "Solid3DNode");
     const firstExpose = comp.expose.properties[0];
     assert.ok(firstExpose);
     assert.equal(firstExpose.name.name, "mating_crosshair");
@@ -76,14 +71,14 @@ test("Component Type Blueprint Construction and Interface Exposure", () => {
 test("Expose accepts a vector anchor and member access reads it", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component Outer() {
-            Solid3D(faces: [])
-            expose { cavity: Vector(x: 3.0, y: 3.0, z: 3.0) }
-        }
-        def seat = Outer().cavity
+        def Outer = Component(
+            solid: Solid3D(faces: []),
+            expose: { cavity: Vector(x: 3.0, y: 3.0, z: 3.0) }
+        )
+        def seat = Outer.cavity
     `;
     const ast = new Parser(source).parse();
-    const comp = ast.body[0] as ComponentDeclaration;
+    const comp = (ast.body[0] as VariableDeclaration).value as ComponentExpression;
     const exposed = comp.expose.properties[0];
     assert.ok(exposed);
     assert.equal(exposed.value.type, "VectorLiteral");
@@ -91,7 +86,7 @@ test("Expose accepts a vector anchor and member access reads it", () => {
     assert.equal(decl.value.type, "MemberExpression");
     if (decl.value.type === "MemberExpression") {
         assert.equal(decl.value.property, "cavity");
-        assert.equal(decl.value.object.type, "CallExpression");
+        assert.equal(decl.value.object.type, "Identifier");
     }
 });
 
@@ -251,57 +246,50 @@ test("Cons Operator Right-Associativity Structural Nesting", () => {
 test("A component root can be a join of components", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        component Left() {
-            Solid3D(faces: [])
-            expose {}
-        }
-        component Pair() {
-            join(fixed: Left(), moving: Left(), using: mate) {
-                fixed + moving
-            }
-            expose {}
-        }
+        def Left = Component(solid: Solid3D(faces: []), expose: {})
+        def Pair = Component(
+            solid: join(frame: Left, placed: Left, using: frame => placed => mate, combine: frame => placed => frame + placed),
+            expose: {}
+        )
     `;
     const ast = new Parser(source).parse();
-    const pair = ast.body[1] as any;
-    assert.equal(pair.type, "ComponentDeclaration");
-    assert.equal(pair.rootGeometry.type, "JoinDomain");
-    assert.equal(pair.rootGeometry.result.operator, "+");
+    const pair = (ast.body[1] as VariableDeclaration).value as ComponentExpression;
+    assert.equal(pair.type, "ComponentExpression");
+    assert.equal(pair.solid.type, "JoinDomain");
+    if (pair.solid.type !== "JoinDomain" || pair.solid.combine.type !== "LambdaExpression" || pair.solid.combine.body.type !== "LambdaExpression" || pair.solid.combine.body.body.type !== "BinaryExpression") {
+        assert.fail("pair solid is a join of the two parts");
+    }
+    assert.equal(pair.solid.combine.body.body.operator, "+");
     assert.equal(pair.expose.properties.length, 0);
 });
 
 test("Join domain binds two solids and a result", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        def cut = join(fixed: Block(), moving: Hole(), using: mate) {
-            def span = 1.0 - 0.5
-            fixed - moving
-        }
+        def cut = join(frame: Block(), placed: Hole(), using: frame => placed => mate, combine: frame => placed => frame - placed)
     `;
     const ast = new Parser(source).parse();
     const join = (ast.body[0] as any).value;
     assert.equal(join.type, "JoinDomain");
-    assert.equal(join.fixed.type, "CallExpression");
-    assert.equal(join.moving.callee.name, "Hole");
-    assert.equal(join.using.name, "mate");
-    assert.equal(join.body.length, 1);
-    assert.equal(join.body[0].name.name, "span");
-    assert.equal(join.result.type, "BinaryExpression");
-    assert.equal(join.result.operator, "-");
-    assert.equal(join.result.left.name, "fixed");
-    assert.equal(join.result.right.name, "moving");
+    assert.equal(join.frame.type, "CallExpression");
+    assert.equal(join.placed.callee.name, "Hole");
+    assert.equal(join.using.type, "LambdaExpression");
+    assert.equal(join.using.parameter.name, "frame");
+    assert.equal(join.using.body.parameter.name, "placed");
+    assert.equal(join.using.body.body.name, "mate");
+    assert.equal(join.combine.type, "LambdaExpression");
+    assert.equal(join.combine.parameter.name, "frame");
+    assert.equal(join.combine.body.parameter.name, "placed");
+    assert.equal(join.combine.body.body.type, "BinaryExpression");
+    assert.equal(join.combine.body.body.operator, "-");
+    assert.equal(join.combine.body.body.left.name, "frame");
+    assert.equal(join.combine.body.body.right.name, "placed");
 });
 
-test("Join without a body is rejected", () => {
-    const missingBody = `
+test("Join needs a combine", () => {
+    const missingCombine = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        def cut = join(fixed: Block(), moving: Hole(), using: mate)
+        def cut = join(frame: Block(), placed: Hole(), using: frame => placed => mate)
     `;
-    assert.throws(() => new Parser(missingBody).parse(), /Parser Error: join domain needs a body/);
-
-    const emptyBody = `
-        setup { units: "mm", coordinate_system: "Z-up" }
-        def cut = join(fixed: Block(), moving: Hole(), using: mate) {}
-    `;
-    assert.throws(() => new Parser(emptyBody).parse(), /Parser Error: join domain needs a body/);
+    assert.throws(() => new Parser(missingCombine).parse(), /Parser Error: join needs frame, placed, using, and combine/);
 });

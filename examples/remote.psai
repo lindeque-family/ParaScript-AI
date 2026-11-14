@@ -1,0 +1,410 @@
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+// Samsung remote from the photo. The body is a rounded slab. The buttons,
+// the navigation ring, the volume and channel rockers, and the slot are
+// separate solids seated on that slab. The lower half is the blank grip.
+// origin is the point the renderer hangs the remote on.
+def pi = 3.14159265359
+
+def radius = 21.0
+def straight = 134.0
+def half = 67.0
+def thick = 14.0
+def bite = 1.0
+def rise = thick - bite
+
+def key_r = 4.5
+def key_h = 2.0
+def ring_r = 15.0
+def ring_h = 2.2
+def bore_r = 7.6
+def bore_h = 4.2
+def select_r = 5.2
+def select_h = 2.6
+def rocker_r = 4.0
+def rocker_straight = 9.0
+def rocker_h = 2.0
+def groove_w = 28.0
+def groove_d = 2.0
+def groove_h = 3.0
+def groove_sink = 1.2
+def badge_w = 24.0
+def badge_d = 3.6
+def badge_h = 1.4
+
+def x_power = 0.0 - 9.0
+def y_power = 72.0
+def x_mic = 9.0
+def y_mic = 72.0
+def x_numbers = 0.0 - 12.0
+def y_numbers = 58.0
+def y_ring = 33.0
+def x_back = 0.0 - 13.0
+def x_play = 13.0
+def y_menu = 9.0
+def x_volume = 0.0 - 12.0
+def x_channel = 12.0
+def y_rocker = 0.0 - 10.0
+def y_groove = 0.0 - 24.0
+def x_netflix = 0.0 - 12.0
+def y_netflix = 0.0 - 35.0
+def x_tv = 10.0
+def y_tv = 0.0 - 33.0
+def x_disney = 0.0 - 5.0
+def y_disney = 0.0 - 49.0
+def x_prime = 12.0
+def y_prime = 0.0 - 49.0
+def y_badge = 0.0 - 74.0
+
+def Shell = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: radius * 2.0, min_v: u => 0.0, max_v: u => straight, formula: u => v => Vector(x: u - radius, y: v - half, z: thick)),
+        Surface2D(max_u: radius * 2.0, min_v: u => 0.0, max_v: u => straight, formula: u => v => Vector(x: u - radius, y: v - half, z: 0.0)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => radius, formula: u => v => Vector(x: v * cos(rad: u), y: half + v * sin(rad: u), z: thick)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => radius, formula: u => v => Vector(x: v * cos(rad: u), y: 0.0 - half - v * sin(rad: u), z: thick)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => radius, formula: u => v => Vector(x: v * cos(rad: u), y: half + v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => radius, formula: u => v => Vector(x: v * cos(rad: u), y: 0.0 - half - v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: straight, min_v: u => 0.0, max_v: u => thick, formula: u => v => Vector(x: radius, y: u - half, z: v)),
+        Surface2D(max_u: straight, min_v: u => 0.0, max_v: u => thick, formula: u => v => Vector(x: 0.0 - radius, y: u - half, z: v)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => thick, formula: u => v => Vector(x: radius * cos(rad: u), y: half + radius * sin(rad: u), z: v)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => thick, formula: u => v => Vector(x: radius * cos(rad: u), y: 0.0 - half - radius * sin(rad: u), z: v))
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def hx = groove_w / 2.0
+def hy = groove_d / 2.0
+def Groove = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: groove_w, min_v: u => 0.0, max_v: u => groove_d, formula: u => v => Vector(x: u - hx, y: v - hy, z: 0.0)),
+        Surface2D(max_u: groove_w, min_v: u => 0.0, max_v: u => groove_d, formula: u => v => Vector(x: u - hx, y: v - hy, z: groove_h)),
+        Surface2D(max_u: groove_w, min_v: u => 0.0, max_v: u => groove_h, formula: u => v => Vector(x: u - hx, y: 0.0 - hy, z: v)),
+        Surface2D(max_u: groove_w, min_v: u => 0.0, max_v: u => groove_h, formula: u => v => Vector(x: u - hx, y: hy, z: v)),
+        Surface2D(max_u: groove_d, min_v: u => 0.0, max_v: u => groove_h, formula: u => v => Vector(x: 0.0 - hx, y: u - hy, z: v)),
+        Surface2D(max_u: groove_d, min_v: u => 0.0, max_v: u => groove_h, formula: u => v => Vector(x: hx, y: u - hy, z: v))
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def Key = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => key_h, formula: u => v => Vector(x: key_r * cos(rad: u), y: key_r * sin(rad: u), z: v)),
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => key_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => key_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: key_h))
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def RingOuter = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => ring_h, formula: u => v => Vector(x: ring_r * cos(rad: u), y: ring_r * sin(rad: u), z: v)),
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => ring_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => ring_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: ring_h))
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: ring_h / 2.0)
+    }
+)
+
+def RingBore = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => bore_h, formula: u => v => Vector(x: bore_r * cos(rad: u), y: bore_r * sin(rad: u), z: v)),
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => bore_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => bore_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: bore_h))
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: bore_h / 2.0)
+    }
+)
+
+def Ring = Component(
+    solid: join(frame: RingOuter, placed: RingBore, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at, placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame - placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def Select = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => select_h, formula: u => v => Vector(x: select_r * cos(rad: u), y: select_r * sin(rad: u), z: v)),
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => select_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: 2.0 * pi, min_v: u => 0.0, max_v: u => select_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: select_h))
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def span = rocker_straight / 2.0
+def Rocker = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: rocker_r * 2.0, min_v: u => 0.0, max_v: u => rocker_straight, formula: u => v => Vector(x: u - rocker_r, y: v - span, z: rocker_h)),
+        Surface2D(max_u: rocker_r * 2.0, min_v: u => 0.0, max_v: u => rocker_straight, formula: u => v => Vector(x: u - rocker_r, y: v - span, z: 0.0)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => rocker_r, formula: u => v => Vector(x: v * cos(rad: u), y: span + v * sin(rad: u), z: rocker_h)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => rocker_r, formula: u => v => Vector(x: v * cos(rad: u), y: 0.0 - span - v * sin(rad: u), z: rocker_h)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => rocker_r, formula: u => v => Vector(x: v * cos(rad: u), y: span + v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => rocker_r, formula: u => v => Vector(x: v * cos(rad: u), y: 0.0 - span - v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: rocker_straight, min_v: u => 0.0, max_v: u => rocker_h, formula: u => v => Vector(x: rocker_r, y: u - span, z: v)),
+        Surface2D(max_u: rocker_straight, min_v: u => 0.0, max_v: u => rocker_h, formula: u => v => Vector(x: 0.0 - rocker_r, y: u - span, z: v)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => rocker_h, formula: u => v => Vector(x: rocker_r * cos(rad: u), y: span + rocker_r * sin(rad: u), z: v)),
+        Surface2D(max_u: pi, min_v: u => 0.0, max_v: u => rocker_h, formula: u => v => Vector(x: rocker_r * cos(rad: u), y: 0.0 - span - rocker_r * sin(rad: u), z: v))
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def hx = badge_w / 2.0
+def hy = badge_d / 2.0
+def Badge = Component(
+    solid: Solid3D(faces: [
+        Surface2D(max_u: badge_w, min_v: u => 0.0, max_v: u => badge_d, formula: u => v => Vector(x: u - hx, y: v - hy, z: 0.0)),
+        Surface2D(max_u: badge_w, min_v: u => 0.0, max_v: u => badge_d, formula: u => v => Vector(x: u - hx, y: v - hy, z: badge_h)),
+        Surface2D(max_u: badge_w, min_v: u => 0.0, max_v: u => badge_h, formula: u => v => Vector(x: u - hx, y: 0.0 - hy, z: v)),
+        Surface2D(max_u: badge_w, min_v: u => 0.0, max_v: u => badge_h, formula: u => v => Vector(x: u - hx, y: hy, z: v)),
+        Surface2D(max_u: badge_d, min_v: u => 0.0, max_v: u => badge_h, formula: u => v => Vector(x: 0.0 - hx, y: u - hy, z: v)),
+        Surface2D(max_u: badge_d, min_v: u => 0.0, max_v: u => badge_h, formula: u => v => Vector(x: hx, y: u - hy, z: v))
+    ]),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def Cased = Component(
+    solid: join(frame: Shell, placed: Groove, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: 0.0, y: y_groove, z: thick - groove_sink), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame - placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithPower = Component(
+    solid: join(frame: Cased, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_power, y: y_power, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithMic = Component(
+    solid: join(frame: WithPower, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_mic, y: y_mic, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithNumbers = Component(
+    solid: join(frame: WithMic, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_numbers, y: y_numbers, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithRing = Component(
+    solid: join(frame: WithNumbers, placed: Ring, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: 0.0, y: y_ring, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithSelect = Component(
+    solid: join(frame: WithRing, placed: Select, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: 0.0, y: y_ring, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithBack = Component(
+    solid: join(frame: WithSelect, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_back, y: y_menu, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithHome = Component(
+    solid: join(frame: WithBack, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: 0.0, y: y_menu, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithPlay = Component(
+    solid: join(frame: WithHome, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_play, y: y_menu, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithVolume = Component(
+    solid: join(frame: WithPlay, placed: Rocker, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_volume, y: y_rocker, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithChannel = Component(
+    solid: join(frame: WithVolume, placed: Rocker, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_channel, y: y_rocker, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithNetflix = Component(
+    solid: join(frame: WithChannel, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_netflix, y: y_netflix, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithTvPlus = Component(
+    solid: join(frame: WithNetflix, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_tv, y: y_tv, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithDisney = Component(
+    solid: join(frame: WithTvPlus, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_disney, y: y_disney, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def WithPrime = Component(
+    solid: join(frame: WithDisney, placed: Key, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: x_prime, y: y_prime, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        at: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+)
+
+def Remote = Component(
+    solid: join(frame: WithPrime, placed: Badge, using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.at + Vector(x: 0.0, y: y_badge, z: rise), placed: placed.at),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ), combine: frame => placed => frame + placed),
+    expose: {
+        origin: Vector(x: 0.0, y: 0.0, z: thick / 2.0)
+    }
+)
+
+export(Remote)

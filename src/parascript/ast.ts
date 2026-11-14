@@ -7,8 +7,8 @@ export type NodeType =
     | "SetupBlock"
     | "ParamDeclaration"
     | "VariableDeclaration"
-    | "ComponentDeclaration"
     | "ExportStatement"
+    | "ComponentExpression"
     | "ExposeBlock"
     | "ExposeProperty"
     | "Identifier"
@@ -65,12 +65,10 @@ export interface VariableDeclaration extends BaseNode {
     readonly value: ASTNode;
 }
 
-export interface ComponentDeclaration extends BaseNode {
-    readonly type: "ComponentDeclaration";
-    readonly name: Identifier;
-    readonly parameters: Array<NamedArgumentDeclaration>;
-    readonly body: Array<ASTNode>;
-    readonly rootGeometry: ExpressionNode; 
+/** `Component(solid:, expose:)` returns a component. `expose` publishes its anchors. */
+export interface ComponentExpression extends BaseNode {
+    readonly type: "ComponentExpression";
+    readonly solid: ExpressionNode;
     readonly expose: ExposeBlock;
 }
 
@@ -109,6 +107,7 @@ export type ExpressionNode =
     | MemberExpression
     | LambdaExpression
     | JoinDomain
+    | ComponentExpression
     | Curve1DNode
     | Surface2DNode
     | Solid3DNode;
@@ -199,14 +198,13 @@ export interface LambdaExpression extends BaseNode {
     readonly body: ExpressionNode;
 }
 
-/** A join opens a domain. `+` and `-` inside the braces apply to that join's two solids. */
+/** A join seats two components. `combine` is `SeatedSolid3D => SeatedSolid3D => SeatedSolid3D`. */
 export interface JoinDomain extends BaseNode {
     readonly type: "JoinDomain";
-    readonly fixed: ExpressionNode;
-    readonly moving: ExpressionNode;
+    readonly frame: ExpressionNode;
+    readonly placed: ExpressionNode;
     readonly using: ExpressionNode;
-    readonly body: Array<ASTNode>;
-    readonly result: ExpressionNode;
+    readonly combine: ExpressionNode;
 }
 
 export interface Curve1DNode extends BaseNode {
@@ -218,6 +216,7 @@ export interface Curve1DNode extends BaseNode {
 export interface Surface2DNode extends BaseNode {
     readonly type: "Surface2DNode";
     readonly maxU: ExpressionNode;
+    readonly minV: LambdaExpression;
     readonly maxV: LambdaExpression;
     readonly formula: LambdaExpression;
 }
@@ -230,6 +229,5 @@ export interface Solid3DNode extends BaseNode {
 export type ASTNode =
     | ParamDeclaration
     | VariableDeclaration
-    | ComponentDeclaration
     | ExportStatement
     | ExpressionNode;

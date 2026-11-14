@@ -3,6 +3,8 @@
     "**/*.js.map": true,
     "**/*.js": true,
     "**/*.d.ts.map": true,
-    "**/*.d.ts": true
+    "**/*.d.ts": true,
+    "dist/": true,
+    "node_modules/": true
   }
 }

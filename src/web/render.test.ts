@@ -5,6 +5,16 @@ import { ManifoldViewport, PERSPECTIVE_EYE, SHAPE_EDGE } from "./render.js";
 interface DrawSegment {
     color: string;
     length: number;
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+}
+
+interface PlacedLabel {
+    text: string;
+    x: number;
+    y: number;
 }
 
 interface CanvasListener {
@@ -24,6 +34,7 @@ interface DrawLog {
     wireStrokes: number;
     solidStrokes: number;
     labels: string[];
+    placed: PlacedLabel[];
     colors: string[];
     segments: DrawSegment[];
     listeners: CanvasListener[];
@@ -32,7 +43,7 @@ interface DrawLog {
 
 function recordingCanvas(): { canvas: HTMLCanvasElement; log: DrawLog } {
     const log: DrawLog = {
-        fills: [], wireStrokes: 0, solidStrokes: 0, labels: [], colors: [], segments: [], listeners: [], image: null
+        fills: [], wireStrokes: 0, solidStrokes: 0, labels: [], placed: [], colors: [], segments: [], listeners: [], image: null
     };
     const ctx = {
         strokeStyle: "",
@@ -45,26 +56,43 @@ function recordingCanvas(): { canvas: HTMLCanvasElement; log: DrawLog } {
         lineCap: "",
         penX: 0,
         penY: 0,
+        stack: [] as { strokeStyle: string; fillStyle: string; globalAlpha: number }[],
         clearRect(): void {},
         beginPath(): void {},
+        save(): void {
+            this.stack.push({ strokeStyle: this.strokeStyle, fillStyle: this.fillStyle, globalAlpha: this.globalAlpha });
+        },
+        restore(): void {
+            const prev = this.stack.pop();
+            if (!prev) return;
+            this.strokeStyle = prev.strokeStyle;
+            this.fillStyle = prev.fillStyle;
+            this.globalAlpha = prev.globalAlpha;
+        },
         moveTo(x: number, y: number): void {
             this.penX = x;
             this.penY = y;
         },
         lineTo(x: number, y: number): void {
-            log.segments.push({ color: this.strokeStyle, length: Math.hypot(x - this.penX, y - this.penY) });
+            log.segments.push({
+                color: this.strokeStyle,
+                length: Math.hypot(x - this.penX, y - this.penY),
+                x1: this.penX,
+                y1: this.penY,
+                x2: x,
+                y2: y
+            });
             this.penX = x;
             this.penY = y;
         },
         closePath(): void {},
-        save(): void {},
-        restore(): void {},
         fill(): void {
             log.fills.push(this.globalAlpha);
             log.colors.push(this.fillStyle);
         },
-        fillText(text: string): void {
+        fillText(text: string, x = 0, y = 0): void {
             log.labels.push(text);
+            log.placed.push({ text, x, y });
         },
         stroke(): void {
             if (this.strokeStyle === "#9cdcfe") log.wireStrokes += 1;
@@ -128,6 +156,25 @@ function filledAt(values: readonly number[], alpha: number): boolean {
     return values.length > 0 && values.every((value) => value === alpha);
 }
 
+function modelAndCubeFills(values: readonly number[], modelAlpha: number): boolean {
+    let model = 0;
+    for (const value of values) {
+        if (value === modelAlpha) model += 1;
+        else if (value !== 1) return false;
+    }
+    return model > 0;
+}
+
+function axisNames(labels: readonly string[]): string[] {
+    return labels.filter((label) => label === "X" || label === "Y" || label === "Z" || label.endsWith(" up"));
+}
+
+function canvasListener(log: DrawLog, type: string): (event: Event) => void {
+    const found = log.listeners.find((entry) => entry.type === type);
+    assert.ok(found);
+    return found.listener;
+}
+
 function coverage(log: DrawLog): { count: number; mean: number; spread: number; translucent: number } {
     const data = log.image?.data;
     if (!data) return { count: 0, mean: 0, spread: 0, translucent: 0 };
@@ -159,7 +206,7 @@ test("solid sides fills the faces and hides the triangle lines", () => {
         indices: new Uint32Array([0, 2, 1])
     });
 
-    assert.equal(filledAt(log.fills, 0.45), true);
+    assert.equal(modelAndCubeFills(log.fills, 0.45), true);
     assert.ok(log.wireStrokes > 0);
     assert.equal(log.solidStrokes, 0);
 
@@ -171,7 +218,8 @@ test("solid sides fills the faces and hides the triangle lines", () => {
     const solid = coverage(log);
     assert.ok(solid.count > 30);
     assert.equal(solid.translucent, 0);
-    assert.equal(log.fills.length, 0);
+    assert.ok(log.fills.length > 0);
+    assert.equal(filledAt(log.fills, 1), true);
     assert.equal(log.wireStrokes, 0);
     assert.equal(log.solidStrokes, 0);
     assert.equal(countColor(log, "#d5dee8"), 0);
@@ -182,7 +230,7 @@ test("solid sides fills the faces and hides the triangle lines", () => {
     log.solidStrokes = 0;
     viewport.setSolid(false);
 
-    assert.equal(filledAt(log.fills, 0.45), true);
+    assert.equal(modelAndCubeFills(log.fills, 0.45), true);
     assert.ok(log.wireStrokes > 0);
     assert.equal(log.solidStrokes, 0);
     assert.equal(listeners.has("mouseup"), true);
@@ -197,15 +245,15 @@ test("axes name x, y, and z and mark the up direction", () => {
         positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
         indices: new Uint32Array([0, 1, 2])
     });
-    assert.deepEqual(log.labels, ["X", "Y", "Z up"]);
+    assert.deepEqual(axisNames(log.labels), ["X", "Y", "Z up"]);
 
     log.labels.length = 0;
     viewport.setUpAxis("Y-up");
-    assert.deepEqual(log.labels, ["X", "Y up", "Z"]);
+    assert.deepEqual(axisNames(log.labels), ["X", "Y up", "Z"]);
 
     log.labels.length = 0;
     viewport.setUpAxis("X-up");
-    assert.deepEqual(log.labels, ["X up", "Y", "Z"]);
+    assert.deepEqual(axisNames(log.labels), ["X up", "Y", "Z"]);
 });
 
 test("axis arrows shrink as they point away from the camera", () => {
@@ -246,6 +294,101 @@ test("axis arrows shrink as they point away from the camera", () => {
     assert.ok(xShaft < orthoShaft * 0.9);
     assert.ok(longest(log, "#4aa3ff") < longest(log, "#f14c4c"));
     assert.ok(Math.abs(longest(log, "#4aa3ff") - zShaft) < 1);
+});
+
+function shaftTip(log: DrawLog, color: string): { x: number; y: number } {
+    let best: DrawSegment | null = null;
+    for (const segment of log.segments) {
+        if (segment.color !== color) continue;
+        if (!best || segment.length > best.length) best = segment;
+    }
+    assert.ok(best);
+    return { x: best.x2, y: best.y2 };
+}
+
+test("dragging the mouse wheel pans the scene", () => {
+    installViewportGlobals(new Map());
+    const { canvas, log } = recordingCanvas();
+    const viewport = new ManifoldViewport(canvas);
+    viewport.setMesh({
+        positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        indices: new Uint32Array([0, 1, 2])
+    });
+    const before = shaftTip(log, "#f14c4c");
+    const down = canvasListener(log, "mousedown");
+    const move = canvasListener(log, "mousemove");
+    let prevented = false;
+    down({
+        button: 1,
+        clientX: 10,
+        clientY: 20,
+        offsetX: 10,
+        offsetY: 20,
+        preventDefault(): void {
+            prevented = true;
+        }
+    } as unknown as Event);
+    assert.equal(prevented, true);
+    log.segments.length = 0;
+    move({
+        button: 1,
+        clientX: 46,
+        clientY: 28,
+        offsetX: 46,
+        offsetY: 28
+    } as unknown as Event);
+    const after = shaftTip(log, "#f14c4c");
+    assert.ok(Math.abs(after.x - before.x - 36) < 0.5);
+    assert.ok(Math.abs(after.y - before.y - 8) < 0.5);
+});
+
+test("dragging an empty part of the view orbits the part", () => {
+    installViewportGlobals(new Map());
+    const { canvas, log } = recordingCanvas();
+    const viewport = new ManifoldViewport(canvas);
+    viewport.setMesh({
+        positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        indices: new Uint32Array([0, 1, 2])
+    });
+    const before = shaftTip(log, "#f14c4c");
+    const down = canvasListener(log, "mousedown");
+    const move = canvasListener(log, "mousemove");
+    down({ button: 0, clientX: 0, clientY: 0, offsetX: 20, offsetY: 220, preventDefault(): void {} } as unknown as Event);
+    log.segments.length = 0;
+    move({ button: 0, clientX: 40, clientY: 0, offsetX: 60, offsetY: 220 } as unknown as Event);
+    const yawed = shaftTip(log, "#f14c4c");
+    assert.ok(yawed.x < before.x - 2);
+
+    down({ button: 0, clientX: 0, clientY: 0, offsetX: 20, offsetY: 220, preventDefault(): void {} } as unknown as Event);
+    const pitchedFrom = shaftTip(log, "#4aa3ff");
+    log.segments.length = 0;
+    move({ button: 0, clientX: 0, clientY: 40, offsetX: 20, offsetY: 260 } as unknown as Event);
+    const pitched = shaftTip(log, "#4aa3ff");
+    assert.ok(pitched.y > pitchedFrom.y + 2);
+});
+
+test("clicking the view cube snaps to that side", () => {
+    installViewportGlobals(new Map());
+    const { canvas, log } = recordingCanvas();
+    const viewport = new ManifoldViewport(canvas);
+    viewport.setMesh({
+        positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        indices: new Uint32Array([0, 1, 2])
+    });
+    const bottom = log.placed.find((label) => label.text === "Bottom");
+    assert.ok(bottom);
+    const down = canvasListener(log, "mousedown");
+    log.segments.length = 0;
+    down({
+        button: 0,
+        clientX: 0,
+        clientY: 0,
+        offsetX: bottom.x,
+        offsetY: bottom.y,
+        preventDefault(): void {}
+    } as unknown as Event);
+    assert.ok(longest(log, "#4aa3ff") < 8);
+    assert.ok(longest(log, "#f14c4c") > 40);
 });
 
 test("the mouse wheel zooms the model in and out", () => {
