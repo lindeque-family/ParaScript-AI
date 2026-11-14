@@ -1,0 +1,92 @@
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+// Body, cabin, and wheel are separate solids. Joins seat them on each other.
+def pi = 3.14159265359
+def body_w = 100.0
+def body_d = 200.0
+def body_h = 20.0
+def cabin_w = 80.0
+def cabin_d = 70.0
+def cabin_h = 32.0
+def wheel_r = 12.0
+def wheel_w = 14.0
+def track = body_w - wheel_w
+def ride = 8.0
+def nose = 42.0
+def wheelbase = 120.0
+def roof_overlap = 8.0
+
+def seat_front = relate(
+    right: anchor(fixed: origin, moving: origin, by: wheel_w / 2.0),
+    forward: anchor(fixed: origin, moving: origin, by: body_d - nose),
+    up: anchor(fixed: origin, moving: origin, by: wheel_r - ride)
+)
+
+def seat_rear = relate(
+    right: anchor(fixed: origin, moving: origin, by: wheel_w / 2.0),
+    forward: anchor(fixed: origin, moving: origin, by: body_d - nose - wheelbase),
+    up: anchor(fixed: origin, moving: origin, by: wheel_r - ride)
+)
+
+component Body() {
+    Solid3D(faces: [
+        Surface2D(max_u: body_w, max_v: u => body_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: body_w, max_v: u => body_d, formula: u => v => Vector(x: u, y: v, z: body_h)),
+        Surface2D(max_u: body_w, max_v: u => body_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: body_w, max_v: u => body_h, formula: u => v => Vector(x: u, y: body_d, z: v)),
+        Surface2D(max_u: body_d, max_v: u => body_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: body_d, max_v: u => body_h, formula: u => v => Vector(x: body_w, y: u, z: v))
+    ])
+    expose {}
+}
+
+component Cabin() {
+    Solid3D(faces: [
+        Surface2D(max_u: cabin_w, max_v: u => cabin_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: cabin_w, max_v: u => cabin_d, formula: u => v => Vector(x: u, y: v, z: cabin_h)),
+        Surface2D(max_u: cabin_w, max_v: u => cabin_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: cabin_w, max_v: u => cabin_h, formula: u => v => Vector(x: u, y: cabin_d, z: v)),
+        Surface2D(max_u: cabin_d, max_v: u => cabin_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: cabin_d, max_v: u => cabin_h, formula: u => v => Vector(x: cabin_w, y: u, z: v))
+    ])
+    expose {}
+}
+
+component Wheel() {
+    def half = wheel_w / 2.0
+    Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, max_v: u => wheel_w, formula: u => v => Vector(x: 0.0 - half + v, y: wheel_r * cos(rad: u), z: wheel_r * sin(rad: u))),
+        Surface2D(max_u: 2.0 * pi, max_v: u => wheel_r, formula: u => v => Vector(x: 0.0 - half, y: v * cos(rad: u), z: v * sin(rad: u))),
+        Surface2D(max_u: 2.0 * pi, max_v: u => wheel_r, formula: u => v => Vector(x: half, y: v * cos(rad: u), z: v * sin(rad: u)))
+    ])
+    expose {}
+}
+
+component Hull() {
+    join(fixed: Body(), moving: Cabin(), using: on_top(overlap: roof_overlap)) {
+        fixed + moving
+    }
+    expose {}
+}
+
+component Axle() {
+    join(fixed: Wheel(), moving: Wheel(), using: apart(right: track, forward: 0.0, up: 0.0)) {
+        fixed + moving
+    }
+    expose {}
+}
+
+component Car() {
+    join(fixed: Hull(), moving: Axle(), using: seat_front) {
+        def with_front = fixed + moving
+        join(fixed: with_front, moving: Axle(), using: seat_rear) {
+            fixed + moving
+        }
+    }
+    expose {}
+}
+
+export(Car())

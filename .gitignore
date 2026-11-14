@@ -1,0 +1,4 @@
+**/*.ts.map
+**/*.d.ts
+dist/
+node_modules/

@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    /* File Layout Rules */
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    /* Modern Node.js Runtime Resolution Pipeline */
+    "module": "nodenext",
+    "target": "esnext",
+    "moduleDetection": "force",
+    "types": ["node"],
+
+    /* Pure Structural Type Definitions & Map References */
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    /* Advanced Strict Type Safety Protections */
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedSideEffectImports": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"]
+}

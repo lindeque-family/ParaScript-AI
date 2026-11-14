@@ -1,0 +1,89 @@
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+// ISO 4762 M3 cap-head screw. The shaft is its own solid and hangs below the head.
+def pi = 3.14159265359
+def length = 16.0
+def head_diameter = 5.5
+def head_height = 3.0
+def thread_radius = 1.5
+def overlap = 0.2
+
+component Shaft() {
+    def span = length + overlap
+    Solid3D(faces: [
+        Surface2D(
+            max_u: 2.0 * pi,
+            max_v: u => span,
+            formula: u => v => Vector(
+                x: thread_radius * cos(rad: u),
+                y: thread_radius * sin(rad: u),
+                z: v
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            max_v: u => thread_radius,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: v * sin(rad: u),
+                z: 0.0
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            max_v: u => thread_radius,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: v * sin(rad: u),
+                z: span
+            )
+        )
+    ])
+    expose {}
+}
+
+component Head() {
+    def radius = head_diameter / 2.0
+    Solid3D(faces: [
+        Surface2D(
+            max_u: 2.0 * pi,
+            max_v: u => head_height,
+            formula: u => v => Vector(
+                x: radius * cos(rad: u),
+                y: radius * sin(rad: u),
+                z: v
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            max_v: u => radius,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: v * sin(rad: u),
+                z: 0.0
+            )
+        ),
+        Surface2D(
+            max_u: 2.0 * pi,
+            max_v: u => radius,
+            formula: u => v => Vector(
+                x: v * cos(rad: u),
+                y: v * sin(rad: u),
+                z: head_height
+            )
+        )
+    ])
+    expose {}
+}
+
+component M3Screw() {
+    join(fixed: Head(), moving: Shaft(), using: below(overlap: overlap)) {
+        fixed + moving
+    }
+    expose {}
+}
+
+export(M3Screw())

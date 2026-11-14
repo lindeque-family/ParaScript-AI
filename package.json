@@ -1,0 +1,35 @@
+{
+  "name": "parascript-ai",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "rebuild": "npm run clean && npm run build",
+    "start": "tsc && node dist/web/server.js",
+    "test": "tsc && node --test dist/**/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lindeque-family/ParaScript-AI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lindeque-family/ParaScript-AI/issues"
+  },
+  "homepage": "https://github.com/lindeque-family/ParaScript-AI#readme",
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "earcut": "^3.2.4"
+  }
+}

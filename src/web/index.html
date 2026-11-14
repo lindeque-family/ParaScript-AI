@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParaScript AI - 3D Manifold Workspace</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; background: #1e1e1e; color: #fff; }
+        #app-container { display: flex; width: 100%; height: 100%; }
+        #editor-pane { width: 45%; height: 100%; display: flex; flex-direction: column; border-right: 2px solid #2d2d2d; }
+        .pane-header { background: #252526; padding: 12px 20px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #858585; border-bottom: 1px solid #2d2d2d; display: flex; justify-content: space-between; align-items: center; }
+        #code-input { flex-grow: 1; width: 100%; background: #1e1e1e; border: none; color: #d4d4d4; font-family: "Fira Code", Consolas, Monaco, monospace; font-size: 14px; padding: 20px; resize: none; outline: none; line-height: 1.5; }
+        #render-pane { width: 55%; height: 100%; display: flex; flex-direction: column; position: relative; }
+        #canvas-container { flex-grow: 1; width: 100%; height: 100%; position: relative; background: #1a1a1a; }
+        #compiler-status { position: absolute; bottom: 20px; left: 20px; padding: 12px 20px; background: rgba(30, 30, 30, 0.85); border-radius: 6px; border: 1px solid #4e4e4e; font-size: 13px; font-family: monospace; max-width: 80%; pointer-events: none; z-index: 10; }
+        .status-success { color: #4ec9b0; border-color: #24423a !important; background: rgba(20, 35, 32, 0.9) !important; }
+        .status-error { color: #f48771; border-color: #5a322a !important; background: rgba(45, 25, 22, 0.9) !important; }
+        #compile-btn { background: #007acc; color: white; border: none; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
+        #compile-btn:hover { background: #0062b3; }
+        .solid-toggle { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: #cccccc; cursor: pointer; user-select: none; }
+        .solid-toggle input { width: 14px; height: 14px; margin: 0; accent-color: #007acc; cursor: pointer; }
+        #manifold-canvas { width: 100%; height: 100%; display: block; }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <div id="editor-pane">
+            <div class="pane-header">
+                <span>workspace.para</span>
+                <button id="compile-btn">RUN SOLVER</button>
+            </div>
+            <textarea id="code-input" spellcheck="false">setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+def size = 40.0
+def height = 40.0
+def half = 20.0
+
+component Pyramid() {
+    Solid3D(faces: [
+    Surface2D(
+        max_u: size,
+        max_v: u => size,
+        formula: u => v => Vector(x: u - half, y: v - half, z: 0.0)
+    ),
+    Surface2D(
+        max_u: size,
+        max_v: u => 1.0,
+        formula: u => v => Vector(
+            x: (u - half) * (1.0 - v),
+            y: half * (1.0 - v),
+            z: height * v
+        )
+    ),
+    Surface2D(
+        max_u: size,
+        max_v: u => 1.0,
+        formula: u => v => Vector(
+            x: (u - half) * (1.0 - v),
+            y: 0.0 - half * (1.0 - v),
+            z: height * v
+        )
+    ),
+    Surface2D(
+        max_u: size,
+        max_v: u => 1.0,
+        formula: u => v => Vector(
+            x: half * (1.0 - v),
+            y: (u - half) * (1.0 - v),
+            z: height * v
+        )
+    ),
+    Surface2D(
+        max_u: size,
+        max_v: u => 1.0,
+        formula: u => v => Vector(
+            x: 0.0 - half * (1.0 - v),
+            y: (u - half) * (1.0 - v),
+            z: height * v
+        )
+    )
+    ])
+    expose {}
+}
+export(Pyramid())</textarea>
+        </div>
+        <div id="render-pane">
+            <div class="pane-header">
+                <span>Interactive 3D Manifold Engine Canvas</span>
+                <label class="solid-toggle">
+                    <input id="solid-sides" type="checkbox">
+                    Solid sides
+                </label>
+            </div>
+            <div id="canvas-container">
+                <canvas id="manifold-canvas"></canvas>
+            </div>
+            <div id="compiler-status" class="status-success">Engine Connected. Awaiting compilation run.</div>
+        </div>
+    </div>
+
+    <script type="module" src="/dist/web/main.js?v=18"></script>
+</body>
+</html>

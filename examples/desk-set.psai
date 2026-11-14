@@ -1,0 +1,194 @@
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+// Each solid is its own part. Joins say how the moving part sits on the fixed one.
+def pi = 3.14159265359
+def base_w = 80.0
+def base_d = 40.0
+def base_h = 8.0
+def block_w = 14.0
+def block_d = 30.0
+def block_h = 9.0
+def cable_r = 2.5
+def cable_span = 32.0
+def clip_pitch = 20.0
+def clip_gap = clip_pitch - block_w
+def clip_row = block_w * 3.0 + clip_gap * 2.0
+def clip_margin = (base_w - clip_row) / 2.0
+def bite = 1.0
+def shaker_r = 16.0
+def bore_r = 13.0
+def cup_h = 55.0
+def bore_h = 54.0
+def floor_t = 2.0
+def cap_r = 17.0
+def cap_h = 10.0
+def lip = 3.0
+def hole_r = 1.3
+def vent_h = 6.0
+def vent_z = 6.0
+def vent_pitch = 6.0
+def clearance = 60.0
+
+def seat_clips = relate(
+    right: anchor(fixed: min, moving: min, by: clip_margin),
+    forward: anchor(fixed: centre, moving: centre, by: 0.0),
+    up: anchor(fixed: max, moving: min, by: 0.0 - bite)
+)
+
+def seat_bore = relate(
+    right: anchor(fixed: centre, moving: centre, by: 0.0),
+    forward: anchor(fixed: centre, moving: centre, by: 0.0),
+    up: anchor(fixed: min, moving: min, by: floor_t)
+)
+
+def seat_vents = relate(
+    right: anchor(fixed: centre, moving: origin, by: 0.0),
+    forward: anchor(fixed: centre, moving: origin, by: 0.0),
+    up: anchor(fixed: min, moving: origin, by: vent_z)
+)
+
+def seat_end = relate(
+    right: anchor(fixed: origin, moving: origin, by: clip_pitch * 2.0),
+    forward: anchor(fixed: origin, moving: origin, by: 0.0),
+    up: anchor(fixed: origin, moving: origin, by: 0.0)
+)
+
+def seat_shaker = relate(
+    right: anchor(fixed: max, moving: centre, by: shaker_r + clearance),
+    forward: anchor(fixed: centre, moving: centre, by: 0.0),
+    up: anchor(fixed: min, moving: min, by: 0.0)
+)
+
+component Base() {
+    Solid3D(faces: [
+        Surface2D(max_u: base_w, max_v: u => base_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: base_w, max_v: u => base_d, formula: u => v => Vector(x: u, y: v, z: base_h)),
+        Surface2D(max_u: base_w, max_v: u => base_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: base_w, max_v: u => base_h, formula: u => v => Vector(x: u, y: base_d, z: v)),
+        Surface2D(max_u: base_d, max_v: u => base_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: base_d, max_v: u => base_h, formula: u => v => Vector(x: base_w, y: u, z: v))
+    ])
+    expose {}
+}
+
+component Block() {
+    Solid3D(faces: [
+        Surface2D(max_u: block_w, max_v: u => block_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: block_w, max_v: u => block_d, formula: u => v => Vector(x: u, y: v, z: block_h)),
+        Surface2D(max_u: block_w, max_v: u => block_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: block_w, max_v: u => block_h, formula: u => v => Vector(x: u, y: block_d, z: v)),
+        Surface2D(max_u: block_d, max_v: u => block_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: block_d, max_v: u => block_h, formula: u => v => Vector(x: block_w, y: u, z: v))
+    ])
+    expose {}
+}
+
+component Cable() {
+    def half = cable_span / 2.0
+    Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, max_v: u => cable_span, formula: u => v => Vector(x: cable_r * cos(rad: u), y: 0.0 - half + v, z: cable_r * sin(rad: u))),
+        Surface2D(max_u: 2.0 * pi, max_v: u => cable_r, formula: u => v => Vector(x: v * cos(rad: u), y: 0.0 - half, z: v * sin(rad: u))),
+        Surface2D(max_u: 2.0 * pi, max_v: u => cable_r, formula: u => v => Vector(x: v * cos(rad: u), y: half, z: v * sin(rad: u)))
+    ])
+    expose {}
+}
+
+component Clip() {
+    join(fixed: Block(), moving: Cable(), using: centred) {
+        fixed - moving
+    }
+    expose {}
+}
+
+component Clips() {
+    join(fixed: Clip(), moving: Clip(), using: apart(right: clip_pitch, forward: 0.0, up: 0.0)) {
+        def pair = fixed + moving
+        join(fixed: pair, moving: Clip(), using: seat_end) {
+            fixed + moving
+        }
+    }
+    expose {}
+}
+
+component Organizer() {
+    join(fixed: Base(), moving: Clips(), using: seat_clips) {
+        fixed + moving
+    }
+    expose {}
+}
+
+component ShakerOuter() {
+    Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, max_v: u => cup_h, formula: u => v => Vector(x: shaker_r * cos(rad: u), y: shaker_r * sin(rad: u), z: v)),
+        Surface2D(max_u: 2.0 * pi, max_v: u => shaker_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: 2.0 * pi, max_v: u => shaker_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: cup_h))
+    ])
+    expose {}
+}
+
+component ShakerBore() {
+    Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, max_v: u => bore_h, formula: u => v => Vector(x: bore_r * cos(rad: u), y: bore_r * sin(rad: u), z: v)),
+        Surface2D(max_u: 2.0 * pi, max_v: u => bore_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: 2.0 * pi, max_v: u => bore_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: bore_h))
+    ])
+    expose {}
+}
+
+component Cup() {
+    join(fixed: ShakerOuter(), moving: ShakerBore(), using: seat_bore) {
+        fixed - moving
+    }
+    expose {}
+}
+
+component CapShell() {
+    Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, max_v: u => cap_h, formula: u => v => Vector(x: cap_r * cos(rad: u), y: cap_r * sin(rad: u), z: v)),
+        Surface2D(max_u: 2.0 * pi, max_v: u => cap_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: 2.0 * pi, max_v: u => cap_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: cap_h))
+    ])
+    expose {}
+}
+
+component Vent() {
+    Solid3D(faces: [
+        Surface2D(max_u: 2.0 * pi, max_v: u => vent_h, formula: u => v => Vector(x: hole_r * cos(rad: u), y: hole_r * sin(rad: u), z: v)),
+        Surface2D(max_u: 2.0 * pi, max_v: u => hole_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: 0.0)),
+        Surface2D(max_u: 2.0 * pi, max_v: u => hole_r, formula: u => v => Vector(x: v * cos(rad: u), y: v * sin(rad: u), z: vent_h))
+    ])
+    expose {}
+}
+
+component Vents() {
+    join(fixed: Vent(), moving: Vent(), using: apart(right: vent_pitch, forward: 0.0, up: 0.0)) {
+        fixed + moving
+    }
+    expose {}
+}
+
+component Cap() {
+    join(fixed: CapShell(), moving: Vents(), using: seat_vents) {
+        fixed - moving
+    }
+    expose {}
+}
+
+component Shaker() {
+    join(fixed: Cup(), moving: Cap(), using: on_top(overlap: lip)) {
+        fixed + moving
+    }
+    expose {}
+}
+
+component DeskSet() {
+    join(fixed: Organizer(), moving: Shaker(), using: seat_shaker) {
+        fixed + moving
+    }
+    expose {}
+}
+
+export(DeskSet())

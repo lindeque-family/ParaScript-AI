@@ -1,0 +1,68 @@
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+// 100 mm x 50 mm x 30 mm open box. The floor and the four walls are 3 mm thick.
+// The void starts on the floor and is as tall as the outer box, so it stands clear of the rim.
+// Each part publishes its up, its right, and the point those frames share.
+// align makes the planes parallel, slides the points together, then rotates in that plane.
+// origin is the point the renderer hangs the whole box on.
+def w = 100.0
+def d = 50.0
+def h = 30.0
+def wall = 3.0
+
+component Outer() {
+    Solid3D(faces: [
+        Surface2D(max_u: w, max_v: u => d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: w, max_v: u => d, formula: u => v => Vector(x: u, y: v, z: h)),
+        Surface2D(max_u: w, max_v: u => h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: w, max_v: u => h, formula: u => v => Vector(x: u, y: d, z: v)),
+        Surface2D(max_u: d, max_v: u => h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: d, max_v: u => h, formula: u => v => Vector(x: w, y: u, z: v))
+    ])
+    expose {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        cavity: Vector(x: wall, y: wall, z: wall)
+    }
+}
+
+component Void() {
+    def inner_w = w - (wall * 2.0)
+    def inner_d = d - (wall * 2.0)
+    def inner_h = h
+    Solid3D(faces: [
+        Surface2D(max_u: inner_w, max_v: u => inner_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: inner_w, max_v: u => inner_d, formula: u => v => Vector(x: u, y: v, z: inner_h)),
+        Surface2D(max_u: inner_w, max_v: u => inner_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: inner_w, max_v: u => inner_h, formula: u => v => Vector(x: u, y: inner_d, z: v)),
+        Surface2D(max_u: inner_d, max_v: u => inner_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: inner_d, max_v: u => inner_h, formula: u => v => Vector(x: inner_w, y: u, z: v))
+    ])
+    expose {
+        up: Vector(x: 0.0, y: 0.0, z: 1.0),
+        right: Vector(x: 1.0, y: 0.0, z: 0.0),
+        seat: Vector(x: 0.0, y: 0.0, z: 0.0)
+    }
+}
+
+component HollowBox() {
+    join(
+        fixed: Outer(),
+        moving: Void(),
+        using: align(
+            planar: meet(fixed: fixed.up, moving: moving.up),
+            translation: meet(fixed: fixed.cavity, moving: moving.seat),
+            rotation: meet(fixed: fixed.right, moving: moving.right)
+        )
+    ) {
+        fixed - moving
+    }
+    expose {
+        origin: Vector(x: w / 2.0, y: d / 2.0, z: h / 2.0)
+    }
+}
+
+export(HollowBox())
