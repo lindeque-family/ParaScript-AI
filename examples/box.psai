@@ -5,7 +5,7 @@ setup {
 
 // 100 mm x 50 mm x 30 mm open box. The floor and the four walls are 3 mm thick.
 // The void starts on the floor and is as tall as the outer box, so it stands clear of the rim.
-// Each part publishes its up, its right, and the point those frames share.
+// box returns that solid rectangle. corner is its minimum point.
 // align makes the planes parallel, slides the points together, then rotates in that plane.
 // origin is the point the renderer hangs the whole box on.
 def w = 100.0
@@ -13,48 +13,33 @@ def d = 50.0
 def h = 30.0
 def wall = 3.0
 
-def Outer = Component(
+def Box = width => depth => height => Component(
     solid: Solid3D(faces: [
-        Surface2D(max_u: w, min_v: u => 0.0, max_v: u => d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
-        Surface2D(max_u: w, min_v: u => 0.0, max_v: u => d, formula: u => v => Vector(x: u, y: v, z: h)),
-        Surface2D(max_u: w, min_v: u => 0.0, max_v: u => h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
-        Surface2D(max_u: w, min_v: u => 0.0, max_v: u => h, formula: u => v => Vector(x: u, y: d, z: v)),
-        Surface2D(max_u: d, min_v: u => 0.0, max_v: u => h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
-        Surface2D(max_u: d, min_v: u => 0.0, max_v: u => h, formula: u => v => Vector(x: w, y: u, z: v))
+        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(x: u, y: v, z: 0.0)),
+        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(x: u, y: v, z: height)),
+        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u, y: 0.0, z: v)),
+        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u, y: depth, z: v)),
+        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: 0.0, y: u, z: v)),
+        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: width, y: u, z: v))
     ]),
     expose: {
         up: Vector(x: 0.0, y: 0.0, z: 1.0),
         right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        cavity: Vector(x: wall, y: wall, z: wall)
+        corner: Vector(x: 0.0, y: 0.0, z: 0.0)
     }
 )
 
 def inner_w = w - (wall * 2.0)
 def inner_d = d - (wall * 2.0)
 def inner_h = h
-def Void = Component(
-    solid: Solid3D(faces: [
-        Surface2D(max_u: inner_w, min_v: u => 0.0, max_v: u => inner_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
-        Surface2D(max_u: inner_w, min_v: u => 0.0, max_v: u => inner_d, formula: u => v => Vector(x: u, y: v, z: inner_h)),
-        Surface2D(max_u: inner_w, min_v: u => 0.0, max_v: u => inner_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
-        Surface2D(max_u: inner_w, min_v: u => 0.0, max_v: u => inner_h, formula: u => v => Vector(x: u, y: inner_d, z: v)),
-        Surface2D(max_u: inner_d, min_v: u => 0.0, max_v: u => inner_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
-        Surface2D(max_u: inner_d, min_v: u => 0.0, max_v: u => inner_h, formula: u => v => Vector(x: inner_w, y: u, z: v))
-    ]),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        seat: Vector(x: 0.0, y: 0.0, z: 0.0)
-    }
-)
 
 def HollowBox = Component(
     solid: join(
-        frame: Outer,
-        placed: Void,
+        frame: Box(width: w, depth: d, height: h),
+        placed: Box(width: inner_w, depth: inner_d, height: inner_h),
         using: frame => placed => align(
             planar: meet(frame: frame.up, placed: placed.up),
-            translation: meet(frame: frame.cavity, placed: placed.seat),
+            translation: meet(frame: frame.corner + Vector(x: wall, y: wall, z: wall), placed: placed.corner),
             rotation: meet(frame: frame.right, placed: placed.right)
         ),
         combine: frame => placed => frame - placed

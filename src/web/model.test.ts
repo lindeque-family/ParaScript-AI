@@ -545,6 +545,130 @@ test("align makes the planes parallel before it translates", async () => {
     assert.ok(Math.abs(alongRight.x - 5) < 1e-6 && Math.abs(alongRight.y) < 1e-6 && Math.abs(alongRight.z) < 1e-6);
 });
 
+test("M3 screw has a 0.5 mm thread and a hexagon head", async () => {
+    const source = readFileSync(fileURLToPath(new URL("../../examples/screw.psai", import.meta.url)), "utf8");
+    const compiled = compileParaScriptSource(source);
+    assert.equal(compiled.success, true, compiled.errorMessage ?? "");
+    const mesh = modelMesh(await evaluateModelModule(compiled.javascriptCode ?? ""));
+    assert.equal(pointInsideMesh(mesh, { x: 0, y: 0, z: -8 }), true);
+    assert.equal(pointInsideMesh(mesh, { x: 0, y: 0, z: 1 }), true);
+    assert.equal(pointInsideMesh(mesh, { x: 0, y: 3, z: 1 }), true);
+    assert.equal(pointInsideMesh(mesh, { x: 3, y: 0, z: 1 }), false);
+    assert.equal(pointInsideMesh(mesh, { x: 0, y: 0, z: 4 }), false);
+    assert.equal(pointInsideMesh(mesh, { x: 0, y: 0, z: -17 }), false);
+    assert.equal(pointInsideMesh(mesh, { x: 1.8, y: 0, z: -8 }), false);
+
+    let maxAbsX = 0;
+    let maxAbsY = 0;
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+        const x = mesh.positions[i] ?? 0;
+        const y = mesh.positions[i + 1] ?? 0;
+        const z = mesh.positions[i + 2] ?? 0;
+        if (z < 0.2 || z > 1.8) continue;
+        maxAbsX = Math.max(maxAbsX, Math.abs(x));
+        maxAbsY = Math.max(maxAbsY, Math.abs(y));
+    }
+    // Flats are 5.5 mm apart. Corners sit on the Y axis, 6.35 mm apart.
+    assert.ok(Math.abs(maxAbsX - 2.75) < 0.02, `across-flats half ${maxAbsX}`);
+    assert.ok(Math.abs(maxAbsY - 3.1754) < 0.02, `across-corners half ${maxAbsY}`);
+
+    let sideOut = 0;
+    let sideIn = 0;
+    let topUp = 0;
+    let bottomDown = 0;
+    for (let i = 0; i < mesh.indices.length; i += 3) {
+        const ai = mesh.indices[i] ?? 0;
+        const bi = mesh.indices[i + 1] ?? 0;
+        const ci = mesh.indices[i + 2] ?? 0;
+        const ax = mesh.positions[ai * 3] ?? 0;
+        const ay = mesh.positions[ai * 3 + 1] ?? 0;
+        const az = mesh.positions[ai * 3 + 2] ?? 0;
+        const bx = mesh.positions[bi * 3] ?? 0;
+        const by = mesh.positions[bi * 3 + 1] ?? 0;
+        const bz = mesh.positions[bi * 3 + 2] ?? 0;
+        const cx = mesh.positions[ci * 3] ?? 0;
+        const cy = mesh.positions[ci * 3 + 1] ?? 0;
+        const cz = mesh.positions[ci * 3 + 2] ?? 0;
+        const x = (ax + bx + cx) / 3;
+        const y = (ay + by + cy) / 3;
+        const z = (az + bz + cz) / 3;
+        const nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
+        const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+        const nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+        if (z > 0.3 && z < 1.7 && Math.hypot(x, y) > 2.6) {
+            if (nx * x + ny * y > 0) sideOut += 1;
+            else sideIn += 1;
+        } else if (z > 1.95) {
+            if (nz > 0) topUp += 1;
+        } else if (Math.abs(z) < 0.02 && Math.hypot(x, y) > 1.7) {
+            if (nz < 0) bottomDown += 1;
+        }
+    }
+    assert.equal(sideIn, 0);
+    assert.ok(sideOut > 1000);
+    assert.ok(topUp > 1000);
+    assert.ok(bottomDown > 500);
+
+    let minRadius = Infinity;
+    let maxRadius = 0;
+    const alongX: { z: number; radius: number }[] = [];
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+        const x = mesh.positions[i] ?? 0;
+        const y = mesh.positions[i + 1] ?? 0;
+        const z = mesh.positions[i + 2] ?? 0;
+        const radius = Math.hypot(x, y);
+        if (z > -0.2 || z < -15.8 || radius < 1) continue;
+        minRadius = Math.min(minRadius, radius);
+        maxRadius = Math.max(maxRadius, radius);
+        // A helix is at the crest somewhere on every slice, so follow one generator line.
+        if (Math.abs(y) < 1e-4 && x > 1) alongX.push({ z, radius });
+    }
+    // ISO minor radius is 1.229 mm and the crest is the 1.5 mm major radius.
+    assert.ok(minRadius < 1.32, `root radius ${minRadius}`);
+    assert.ok(maxRadius > 1.46, `crest radius ${maxRadius}`);
+
+    alongX.sort((a, b) => a.z - b.z);
+    let peaks = 0;
+    let rising = false;
+    for (const sample of alongX) {
+        if (!rising && sample.radius > 1.46) {
+            peaks += 1;
+            rising = true;
+        } else if (sample.radius < 1.38) {
+            rising = false;
+        }
+    }
+    assert.ok(peaks >= 28 && peaks <= 36, `thread crests ${peaks}`);
+
+    let outward = 0;
+    let inward = 0;
+    for (let i = 0; i < mesh.indices.length; i += 3) {
+        const ai = mesh.indices[i] ?? 0;
+        const bi = mesh.indices[i + 1] ?? 0;
+        const ci = mesh.indices[i + 2] ?? 0;
+        const ax = mesh.positions[ai * 3] ?? 0;
+        const ay = mesh.positions[ai * 3 + 1] ?? 0;
+        const az = mesh.positions[ai * 3 + 2] ?? 0;
+        const bx = mesh.positions[bi * 3] ?? 0;
+        const by = mesh.positions[bi * 3 + 1] ?? 0;
+        const bz = mesh.positions[bi * 3 + 2] ?? 0;
+        const cx = mesh.positions[ci * 3] ?? 0;
+        const cy = mesh.positions[ci * 3 + 1] ?? 0;
+        const cz = mesh.positions[ci * 3 + 2] ?? 0;
+        const z = (az + bz + cz) / 3;
+        const x = (ax + bx + cx) / 3;
+        const y = (ay + by + cy) / 3;
+        const radius = Math.hypot(x, y);
+        if (z > -0.2 || z < -15.8 || radius < 1.1) continue;
+        const nx = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
+        const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
+        const nz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+        if (nx * x + ny * y > 0) outward += 1;
+        else inward += 1;
+    }
+    assert.ok(outward > inward * 20, `outward ${outward} inward ${inward}`);
+});
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
 }

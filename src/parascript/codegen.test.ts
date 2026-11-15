@@ -60,6 +60,20 @@ test("Code Generator Compiles AST into Live Executable JavaScript", () => {
     });
 });
 
+test("a call applies each argument of a curried function", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def box = width => depth => height => width + depth + height
+        def sum = box(width: 10.0, depth: 4.0, height: 7.0)
+    `;
+    const parser = new Parser(source);
+    const ast = parser.parse();
+    const generatedJs = new WebCodeGenerator().generate(ast);
+    assert.match(generatedJs, /env\.box\(10\)\(4\)\(7\)/);
+    const sum = new Function(`${generatedJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
+    assert.equal(sum, 21);
+});
+
 test("Code Generator Handles Overloaded Geometric Composition and Mating Operators", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }

@@ -37,8 +37,8 @@ export class WebCodeGenerator {
         js += this.indent(`    return found;\n`);
         js += this.indent(`};\n\n`);
 
-        js += this.indent(`env.meet = (frame, placed) => ({ tag: "Meet", frame, placed });\n`);
-        js += this.indent(`env.align = (planar, translation, rotation) => ({ tag: "ConstraintSet", type: "align", planar, translation, rotation });\n`);
+        js += this.indent(`env.meet = (frame) => (placed) => ({ tag: "Meet", frame, placed });\n`);
+        js += this.indent(`env.align = (planar) => (translation) => (rotation) => ({ tag: "ConstraintSet", type: "align", planar, translation, rotation });\n`);
         js += this.indent(`const applyMate = (fn, framePart, placedPart) => {\n`);
         js += this.indent(`    const resolve = (item) => (typeof item === "function" ? item() : item);\n`);
         js += this.indent(`    if (typeof fn !== "function") throw new Error("using needs frame => placed => ConstraintSet.");\n`);
@@ -48,7 +48,7 @@ export class WebCodeGenerator {
         js += this.indent(`    if (!mate || mate.tag !== "ConstraintSet") throw new Error("A join places the placed part with a relative mate.");\n`);
         js += this.indent(`    return mate;\n`);
         js += this.indent(`};\n`);
-        js += this.indent(`env.normal = (u, v, surface) => { /* calculus forward differentiation proxy step */ return { tag: "Vector", x: 0, y: 0, z: 1 }; };\n`);
+        js += this.indent(`env.normal = (u) => (v) => (surface) => { /* calculus forward differentiation proxy step */ return { tag: "Vector", x: 0, y: 0, z: 1 }; };\n`);
         // The frame part keeps the join's frame. The mate poses only the placed part.
         js += this.indent(`const placeAgainst = (framePart, placedPart, constraint) => {\n`);
         js += this.indent(`    const resolve = (item) => (typeof item === "function" ? item() : item);\n`);
@@ -250,8 +250,8 @@ export class WebCodeGenerator {
                 }
 
                 const callee = this.generateExpression(node.callee);
-                const args = node.arguments.map(arg => this.generateExpression(arg.value)).join(", ");
-                return `${callee}(${args})`;
+                const args = node.arguments.map(arg => this.generateExpression(arg.value));
+                return this.applyCall(callee, args);
             }
 
             case "PipeExpression": {
@@ -259,9 +259,8 @@ export class WebCodeGenerator {
                 const rhsCall = node.rightHandSide;
                 const callee = this.generateExpression(rhsCall.callee);
                 const explicitArgs = rhsCall.arguments.map(arg => this.generateExpression(arg.value));
-                // Pipeline operator appends the piped object straight as the trailing parameter input
-                const combinedArgs = [...explicitArgs, left].join(", ");
-                return `${callee}(${combinedArgs})`;
+                // The piped value is the function's last parameter.
+                return this.applyCall(callee, [...explicitArgs, left]);
             }
             case "Curve1DNode": {
                 const maxT = this.generateExpression(node.maxT);
@@ -295,6 +294,12 @@ export class WebCodeGenerator {
                 return `((() => { const _t = ${target}; if (_t.length === 0) return ${onEmpty}; const ${node.headIdentifier.name} = _t[0]; const ${node.tailIdentifier.name} = _t.slice(1); return ${onSplit}; })())`;
             }
         }
+    }
+
+    // User functions are one argument at a time: width => depth => height => body.
+    private applyCall(callee: string, args: string[]): string {
+        if (args.length === 0) return `${callee}()`;
+        return args.reduce((fn, arg) => `${fn}(${arg})`, callee);
     }
 
     private indent(text: string): string {
