@@ -136,7 +136,89 @@ export class ManifoldViewport {
             this.zoom = Math.min(16, Math.max(0.15, next));
             this.scheduleDraw();
         }, { passive: false });
+        this.bindTouch(canvas);
         window.addEventListener("resize", () => this.resize());
+    }
+
+    // One finger orbits and a tap hits the view cube. Two fingers pan and pinch to zoom.
+    private bindTouch(canvas: HTMLCanvasElement): void {
+        let mode: "none" | "orbit" | "pinch" = "none";
+        let lastX = 0;
+        let lastY = 0;
+        let startX = 0;
+        let startY = 0;
+        let moved = false;
+        let span = 1;
+        const changed = (event: TouchEvent): void => {
+            if (event.cancelable) event.preventDefault();
+        };
+        const place = (touch: Touch): void => {
+            lastX = touch.clientX;
+            lastY = touch.clientY;
+        };
+        canvas.addEventListener("touchstart", (event) => {
+            changed(event);
+            const first = event.touches[0];
+            const second = event.touches[1];
+            if (event.touches.length === 1 && first) {
+                mode = "orbit";
+                moved = false;
+                startX = first.clientX;
+                startY = first.clientY;
+                place(first);
+                return;
+            }
+            if (first && second) {
+                mode = "pinch";
+                span = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY) || 1;
+                lastX = (first.clientX + second.clientX) / 2;
+                lastY = (first.clientY + second.clientY) / 2;
+            }
+        }, { passive: false });
+        canvas.addEventListener("touchmove", (event) => {
+            changed(event);
+            const first = event.touches[0];
+            const second = event.touches[1];
+            if (mode === "orbit" && event.touches.length === 1 && first) {
+                const dx = first.clientX - lastX;
+                const dy = first.clientY - lastY;
+                if (Math.hypot(first.clientX - startX, first.clientY - startY) > 4) moved = true;
+                place(first);
+                if (!moved) return;
+                this.orbit(dx, dy);
+                this.scheduleDraw();
+                return;
+            }
+            if (!first || !second) return;
+            mode = "pinch";
+            const scale = this.pointerScale();
+            const midX = (first.clientX + second.clientX) / 2;
+            const midY = (first.clientY + second.clientY) / 2;
+            this.panX += (midX - lastX) * scale.x;
+            this.panY += (midY - lastY) * scale.y;
+            lastX = midX;
+            lastY = midY;
+            const nextSpan = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY) || span;
+            this.zoom = Math.min(16, Math.max(0.15, this.zoom * (nextSpan / span)));
+            span = nextSpan;
+            this.scheduleDraw();
+        }, { passive: false });
+        canvas.addEventListener("touchend", (event) => {
+            if (mode === "orbit" && !moved && event.touches.length === 0) {
+                const face = this.hitViewCube(this.pointerFromClient(startX, startY));
+                if (face) this.snapView(face.name);
+            }
+            const first = event.touches[0];
+            if (!first) {
+                mode = "none";
+                return;
+            }
+            mode = "orbit";
+            moved = true;
+            startX = first.clientX;
+            startY = first.clientY;
+            place(first);
+        });
     }
 
     setMesh(mesh: Mesh): void {
@@ -299,6 +381,14 @@ export class ManifoldViewport {
     private pointer(event: MouseEvent): { x: number; y: number } {
         const scale = this.pointerScale();
         return { x: event.offsetX * scale.x, y: event.offsetY * scale.y };
+    }
+
+    private pointerFromClient(clientX: number, clientY: number): { x: number; y: number } {
+        const rect = typeof this.canvas.getBoundingClientRect === "function"
+            ? this.canvas.getBoundingClientRect()
+            : { left: 0, top: 0 };
+        const scale = this.pointerScale();
+        return { x: (clientX - rect.left) * scale.x, y: (clientY - rect.top) * scale.y };
     }
 
     private setCursor(cursor: string): void {

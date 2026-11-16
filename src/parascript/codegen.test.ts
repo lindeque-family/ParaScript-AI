@@ -60,6 +60,37 @@ test("Code Generator Compiles AST into Live Executable JavaScript", () => {
     });
 });
 
+test(">> runs the left function first and keeps its parameter name", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def shift = d => x => x + d
+        def scale = k => x => k * x
+        def adjust = shift(d: 3.0) >> scale(k: 2.0)
+        def Mark = Component(
+            solid: Solid3D(faces: [
+                Surface2D(
+                    max_u: adjust(x: 4.0),
+                    min_v: u => 0.0, max_v: u => 1.0,
+                    formula: u => v => Vector(x: u, y: v, z: 0.0)
+                )
+            ]),
+            expose: { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
+        )
+        export(Mark)
+    `;
+    inferSourceEnvironment(source);
+    const generatedJs = new WebCodeGenerator().generate(new Parser(source).parse());
+    const mark = new Function(`${generatedJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
+    assert.equal(mark.geometry.faces[0].maxU, 14);
+
+    assert.throws(() => inferSourceEnvironment(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def shift = d => x => x + d
+        def bad = shift(d: 1.0) >> 2.0
+        export(Mark)
+    `), />> composes two functions/);
+});
+
 test("a call applies each argument of a curried function", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }

@@ -22,7 +22,7 @@ ENV NODE_ENV=production \
     PORT=3000
 
 COPY --from=build --chown=node:node /app/dist ./dist
-COPY --from=build --chown=node:node /app/src/web/index.html ./src/web/index.html
+COPY --from=build --chown=node:node /app/src/web/home.html /app/src/web/index.html /app/src/web/language.md /app/src/web/llms.txt /app/src/web/site.css ./src/web/
 
 USER node
 

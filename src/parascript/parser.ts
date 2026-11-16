@@ -324,15 +324,8 @@ export class Parser {
     private parsePipeExpression(): ExpressionNode {
         let expr = this.parseConsExpression();
         while (this.match("PIPE")) {
-            const rhs = this.parsePrimary();
-            if (rhs.type !== "CallExpression") {
-                throw new Error("Parser Error: The destination layout block downstream of a Pipe '>>' must evaluate into a function CallExpression.");
-            }
-            expr = {
-                type: "PipeExpression",
-                leftHandSide: expr,
-                rightHandSide: rhs
-            };
+            const right = this.parseConsExpression();
+            expr = { type: "ComposeExpression", left: expr, right };
         }
         return expr;
     }

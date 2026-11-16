@@ -1,6 +1,7 @@
-const { compileParaScriptSource } = await import(new URL("../parascript/compile.js?v=20", import.meta.url).href) as typeof import("../parascript/compile.js");
-const { evaluateModelModule, modelAnchor, modelMesh, offsetMesh, tessellateFaces } = await import(new URL("./model.js?v=20", import.meta.url).href) as typeof import("./model.js");
-const { ManifoldViewport } = await import(new URL("./render.js?v=20", import.meta.url).href) as typeof import("./render.js");
+const { compileParaScriptSource } = await import(new URL("../parascript/compile.js?v=24", import.meta.url).href) as typeof import("../parascript/compile.js");
+const { evaluateModelModule, modelAnchor, modelMesh, offsetMesh, tessellateFaces } = await import(new URL("./model.js?v=24", import.meta.url).href) as typeof import("./model.js");
+const { ManifoldViewport } = await import(new URL("./render.js?v=24", import.meta.url).href) as typeof import("./render.js");
+const { clampPaneSize, paneSizeFromPointer } = await import(new URL("./splitter.js?v=24", import.meta.url).href) as typeof import("./splitter.js");
 
 function requireElement<T extends Element>(id: string, ctor: new () => T): T {
     const element = document.getElementById(id);
@@ -15,15 +16,92 @@ const statusOverlay = requireElement("compiler-status", HTMLElement);
 const compileBtn = requireElement("compile-btn", HTMLButtonElement);
 const codeInput = requireElement("code-input", HTMLTextAreaElement);
 const solidSides = requireElement("solid-sides", HTMLInputElement);
+const app = requireElement("app-container", HTMLElement);
+const editor = requireElement("editor-pane", HTMLElement);
+const splitter = requireElement("pane-splitter", HTMLElement);
 
 const viewport = new ManifoldViewport(canvas);
+viewport.setSolid(solidSides.checked);
 solidSides.addEventListener("change", () => {
     viewport.setSolid(solidSides.checked);
 });
 
+const stackedQuery = window.matchMedia("(max-width: 800px)");
+const minPane = 180;
+
+function syncSplitterOrientation(): void {
+    splitter.setAttribute("aria-orientation", stackedQuery.matches ? "horizontal" : "vertical");
+}
+
+function placeEditor(size: number): void {
+    const stacked = stackedQuery.matches;
+    const editorBounds = editor.getBoundingClientRect();
+    const appBounds = app.getBoundingClientRect();
+    const start = stacked ? editorBounds.top : editorBounds.left;
+    const end = stacked ? appBounds.bottom : appBounds.right;
+    const bar = stacked ? splitter.offsetHeight : splitter.offsetWidth;
+    const next = clampPaneSize(size, end - start, bar, minPane);
+    editor.style.flexBasis = `${next}px`;
+    const usable = Math.max(1, end - start - bar);
+    splitter.setAttribute("aria-valuenow", String(Math.round((next / usable) * 100)));
+    viewport.resize();
+}
+
+syncSplitterOrientation();
+stackedQuery.addEventListener("change", () => {
+    editor.style.flexBasis = "";
+    syncSplitterOrientation();
+    viewport.resize();
+});
+
+splitter.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    splitter.setPointerCapture(event.pointerId);
+    const drag = (move: PointerEvent) => {
+        const stacked = stackedQuery.matches;
+        const editorBounds = editor.getBoundingClientRect();
+        const appBounds = app.getBoundingClientRect();
+        placeEditor(paneSizeFromPointer({
+            start: stacked ? editorBounds.top : editorBounds.left,
+            end: stacked ? appBounds.bottom : appBounds.right,
+            splitter: stacked ? splitter.offsetHeight : splitter.offsetWidth,
+            pointer: stacked ? move.clientY : move.clientX,
+            min: minPane
+        }));
+    };
+    const stop = (end: PointerEvent) => {
+        if (end.pointerId !== event.pointerId) return;
+        splitter.removeEventListener("pointermove", drag);
+        splitter.removeEventListener("pointerup", stop);
+        splitter.removeEventListener("pointercancel", stop);
+    };
+    splitter.addEventListener("pointermove", drag);
+    splitter.addEventListener("pointerup", stop);
+    splitter.addEventListener("pointercancel", stop);
+});
+
+splitter.addEventListener("keydown", (event) => {
+    const shrink = event.key === "ArrowLeft" || event.key === "ArrowUp";
+    const grow = event.key === "ArrowRight" || event.key === "ArrowDown";
+    if (!shrink && !grow) return;
+    event.preventDefault();
+    const stacked = stackedQuery.matches;
+    const editorBounds = editor.getBoundingClientRect();
+    const current = stacked ? editorBounds.height : editorBounds.width;
+    placeEditor(current + (grow ? 32 : -32));
+});
+
 function showError(message: string): void {
+    statusOverlay.hidden = false;
     statusOverlay.className = "status-error";
     statusOverlay.textContent = message;
+}
+
+function hideStatus(): void {
+    statusOverlay.hidden = true;
+    statusOverlay.className = "";
+    statusOverlay.textContent = "";
 }
 
 function describeResult(value: unknown): string {
@@ -44,8 +122,7 @@ function describeResult(value: unknown): string {
 }
 
 async function runSolver(): Promise<void> {
-    statusOverlay.className = "status-success";
-    statusOverlay.textContent = "Compiling...";
+    hideStatus();
     const result = compileParaScriptSource(codeInput.value);
     if (!result.success || result.javascriptCode === undefined) {
         showError(result.errorMessage ?? "Compilation failed.");
@@ -56,21 +133,13 @@ async function runSolver(): Promise<void> {
 
     try {
         const evaluated = await evaluateModelModule(result.javascriptCode);
-        statusOverlay.textContent = "Meshing...";
-        await new Promise<void>((resolve) => {
-            requestAnimationFrame(() => resolve());
-        });
         const mesh = modelMesh(evaluated);
         const anchor = modelAnchor(evaluated);
         const view = anchor ? offsetMesh(mesh, anchor) : mesh;
-        const triangles = view.indices.length / 3;
         viewport.setMesh(view);
-        if (triangles === 0) {
-            showError(`Compiled. No renderable faces. ${describeResult(evaluated)}`);
-            return;
+        if (view.indices.length === 0) {
+            showError(`No renderable faces. ${describeResult(evaluated)}`);
         }
-        statusOverlay.className = "status-success";
-        statusOverlay.textContent = `Compiled ${triangles} triangles.`;
     } catch (err: unknown) {
         showError(err instanceof Error ? err.message : "Model execution failed.");
         viewport.setMesh(tessellateFaces([]));

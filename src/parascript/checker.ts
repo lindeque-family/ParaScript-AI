@@ -152,6 +152,21 @@ export class TypeInferenceEngine {
                 return tFloat;
             }
 
+            case "ComposeExpression": {
+                const leftType = prune(this.inferExpression(node.left, env));
+                const rightType = prune(this.inferExpression(node.right, env));
+                if (leftType.tag !== "Function" || rightType.tag !== "Function") {
+                    throw new Error("Type Inference Error: >> composes two functions.");
+                }
+                unify(leftType.returnType, rightType.parameter);
+                return {
+                    tag: "Function",
+                    paramName: leftType.paramName,
+                    parameter: leftType.parameter,
+                    returnType: rightType.returnType
+                };
+            }
+
             case "PipeExpression": {
                 const leftType = this.inferExpression(node.leftHandSide, env);
                 const functionType = this.inferExpression(node.rightHandSide, env);

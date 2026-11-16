@@ -425,6 +425,70 @@ test("the mouse wheel zooms the model in and out", () => {
     assert.ok(farther < fitted);
 });
 
+test("a finger drag orbits and a tap on the view cube snaps", () => {
+    installViewportGlobals(new Map());
+    const { canvas, log } = recordingCanvas();
+    const viewport = new ManifoldViewport(canvas);
+    viewport.setMesh({
+        positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        indices: new Uint32Array([0, 1, 2])
+    });
+    const start = canvasListener(log, "touchstart");
+    const move = canvasListener(log, "touchmove");
+    const end = canvasListener(log, "touchend");
+    assert.equal(log.listeners.find((entry) => entry.type === "touchmove")?.passive, false);
+
+    const before = shaftTip(log, "#f14c4c");
+    start({ touches: [{ clientX: 0, clientY: 0 }], preventDefault(): void {} } as unknown as Event);
+    log.segments.length = 0;
+    move({ touches: [{ clientX: 40, clientY: 0 }], preventDefault(): void {} } as unknown as Event);
+    assert.ok(shaftTip(log, "#f14c4c").x < before.x - 2);
+
+    const bottom = log.placed.find((label) => label.text === "Bottom");
+    assert.ok(bottom);
+    start({ touches: [{ clientX: bottom.x, clientY: bottom.y }], preventDefault(): void {} } as unknown as Event);
+    log.segments.length = 0;
+    end({ touches: [], preventDefault(): void {} } as unknown as Event);
+    assert.ok(longest(log, "#4aa3ff") < 8);
+    assert.ok(longest(log, "#f14c4c") > 40);
+});
+
+test("two fingers pan and a pinch zooms", () => {
+    installViewportGlobals(new Map());
+    const { canvas, log } = recordingCanvas();
+    const viewport = new ManifoldViewport(canvas);
+    viewport.setMesh({
+        positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        indices: new Uint32Array([0, 1, 2])
+    });
+    const start = canvasListener(log, "touchstart");
+    const move = canvasListener(log, "touchmove");
+    const before = shaftTip(log, "#f14c4c");
+    start({
+        touches: [{ clientX: 0, clientY: 0 }, { clientX: 40, clientY: 0 }],
+        preventDefault(): void {}
+    } as unknown as Event);
+    log.segments.length = 0;
+    move({
+        touches: [{ clientX: 30, clientY: 0 }, { clientX: 70, clientY: 0 }],
+        preventDefault(): void {}
+    } as unknown as Event);
+    const panned = shaftTip(log, "#f14c4c");
+    assert.ok(Math.abs(panned.x - before.x - 30) < 0.5);
+
+    const fitted = longest(log, "#9cdcfe");
+    start({
+        touches: [{ clientX: 0, clientY: 0 }, { clientX: 100, clientY: 0 }],
+        preventDefault(): void {}
+    } as unknown as Event);
+    log.segments.length = 0;
+    move({
+        touches: [{ clientX: 0, clientY: 0 }, { clientX: 180, clientY: 0 }],
+        preventDefault(): void {}
+    } as unknown as Event);
+    assert.ok(longest(log, "#9cdcfe") > fitted * 1.2);
+});
+
 test("solid shading keeps every side and separates adjacent faces", () => {
     installViewportGlobals(new Map());
     const { canvas, log } = recordingCanvas();

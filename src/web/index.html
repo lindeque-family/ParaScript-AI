@@ -2,25 +2,49 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ParaScript AI - 3D Manifold Workspace</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body, html { width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; background: #1e1e1e; color: #fff; }
-        #app-container { display: flex; width: 100%; height: 100%; }
-        #editor-pane { width: 45%; height: 100%; display: flex; flex-direction: column; border-right: 2px solid #2d2d2d; }
-        .pane-header { background: #252526; padding: 12px 20px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #858585; border-bottom: 1px solid #2d2d2d; display: flex; justify-content: space-between; align-items: center; }
+        html { color-scheme: dark; }
+        body, html { width: 100%; height: 100%; height: 100dvh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; background: #1e1e1e; color: #fff; }
+        #app-container { display: flex; width: 100%; height: 100%; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+        #editor-pane { flex: 0 0 45%; min-width: 0; min-height: 0; height: auto; display: flex; flex-direction: column; }
+        .pane-header { background: #252526; padding: 12px 20px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #858585; border-bottom: 1px solid #2d2d2d; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .header-title, .header-links { display: flex; align-items: center; gap: 14px; }
+        .pane-header a { color: #9cdcfe; text-decoration: none; text-transform: none; letter-spacing: 0; font-weight: 600; }
+        .pane-header a:hover { text-decoration: underline; }
         #code-input { flex-grow: 1; width: 100%; background: #1e1e1e; border: none; color: #d4d4d4; font-family: "Fira Code", Consolas, Monaco, monospace; font-size: 14px; padding: 20px; resize: none; outline: none; line-height: 1.5; }
-        #render-pane { width: 55%; height: 100%; display: flex; flex-direction: column; position: relative; }
-        #canvas-container { flex-grow: 1; width: 100%; height: 100%; position: relative; background: #1a1a1a; }
+        #pane-splitter { flex: 0 0 12px; position: relative; touch-action: none; cursor: col-resize; background: #2d2d2d; user-select: none; }
+        #pane-splitter::before { content: ""; position: absolute; top: 0; bottom: 0; left: -8px; right: -8px; }
+        #pane-splitter::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 36px; transform: translate(-50%, -50%); border-radius: 2px; background: #4e4e4e; }
+        #pane-splitter:hover, #pane-splitter:focus-visible { background: #3c3c3c; outline: 2px solid #007acc; outline-offset: -2px; }
+        #pane-splitter:hover::after, #pane-splitter:focus-visible::after { background: #858585; }
+        #render-pane { flex: 1 1 auto; min-width: 0; min-height: 0; width: auto; height: auto; display: flex; flex-direction: column; position: relative; }
+        #canvas-container { flex-grow: 1; width: 100%; min-height: 0; height: 100%; position: relative; background: #1a1a1a; }
+        #gesture-hint { display: none; position: absolute; top: 10px; left: 12px; z-index: 2; margin: 0; color: #858585; font-size: 12px; pointer-events: none; }
         #compiler-status { position: absolute; bottom: 20px; left: 20px; padding: 12px 20px; background: rgba(30, 30, 30, 0.85); border-radius: 6px; border: 1px solid #4e4e4e; font-size: 13px; font-family: monospace; max-width: 80%; pointer-events: none; z-index: 10; }
-        .status-success { color: #4ec9b0; border-color: #24423a !important; background: rgba(20, 35, 32, 0.9) !important; }
         .status-error { color: #f48771; border-color: #5a322a !important; background: rgba(45, 25, 22, 0.9) !important; }
         #compile-btn { background: #007acc; color: white; border: none; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
         #compile-btn:hover { background: #0062b3; }
         .solid-toggle { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: #cccccc; cursor: pointer; user-select: none; }
         .solid-toggle input { width: 14px; height: 14px; margin: 0; accent-color: #007acc; cursor: pointer; }
-        #manifold-canvas { width: 100%; height: 100%; display: block; }
+        #manifold-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+        @media (max-width: 800px) {
+            #app-container { flex-direction: column; }
+            #editor-pane, #render-pane { width: 100%; }
+            #editor-pane { flex-basis: 46%; height: auto; }
+            #render-pane { height: auto; }
+            #pane-splitter { flex-basis: 18px; cursor: row-resize; }
+            #pane-splitter::before { left: 0; right: 0; top: -14px; bottom: -14px; }
+            #pane-splitter::after { width: 36px; height: 4px; }
+            #code-input { font-size: 16px; padding: 12px; }
+            #compile-btn, .solid-toggle { min-height: 44px; }
+            #compile-btn { padding: 8px 14px; }
+            .header-file { display: none; }
+            #compiler-status { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+            #gesture-hint { display: block; }
+        }
     </style>
 </head>
 <body>
@@ -28,8 +52,8 @@
     <div id="app-container">
         <div id="editor-pane">
             <div class="pane-header">
-                <span>workspace.para</span>
-                <button id="compile-btn">RUN SOLVER</button>
+                <span class="header-title"><a href="/">ParaScript</a><span class="header-file">workspace.para</span></span>
+                <span class="header-links"><a href="/language">Language</a><button id="compile-btn">RUN SOLVER</button></span>
             </div>
             <textarea id="code-input" spellcheck="false">setup {
     units: "mm",
@@ -88,21 +112,23 @@ def Pyramid = Component(
 )
 export(Pyramid)</textarea>
         </div>
+        <div id="pane-splitter" role="separator" tabindex="0" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="45" aria-label="Resize the script and the model" title="Drag to resize"></div>
         <div id="render-pane">
             <div class="pane-header">
-                <span>Interactive 3D Manifold Engine Canvas</span>
+                <span>Model</span>
                 <label class="solid-toggle">
-                    <input id="solid-sides" type="checkbox">
+                    <input id="solid-sides" type="checkbox" checked>
                     Solid sides
                 </label>
             </div>
             <div id="canvas-container">
-                <canvas id="manifold-canvas" title="Drag to orbit. Drag the mouse wheel to pan. Click the view cube for Top, Front, or Left."></canvas>
+                <p id="gesture-hint">Drag to turn. Pinch to zoom. Two fingers pan.</p>
+                <canvas id="manifold-canvas" title="Drag to orbit. Pinch to zoom. Two fingers, or the mouse wheel, pan. Tap the view cube for Top, Front, or Left."></canvas>
             </div>
-            <div id="compiler-status" class="status-success">Engine Connected. Awaiting compilation run.</div>
+            <div id="compiler-status" hidden></div>
         </div>
     </div>
 
-    <script type="module" src="/dist/web/main.js?v=20"></script>
+    <script type="module" src="/dist/web/main.js?v=24"></script>
 </body>
 </html>

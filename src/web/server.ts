@@ -2,27 +2,51 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile, stat } from "node:fs/promises";
 import { resolve, sep, extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { parascriptExamples, renderLanguagePage } from "./markdown.js";
 
 const projectRoot = fileURLToPath(new URL("../..", import.meta.url));
 const distRoot = resolve(projectRoot, "dist");
-const indexPath = resolve(projectRoot, "src", "web", "index.html");
+const webRoot = resolve(projectRoot, "src", "web");
+
+function webFile(name: string): string {
+    const full = resolve(webRoot, name);
+    const prefix = webRoot.endsWith(sep) ? webRoot : webRoot + sep;
+    if (!full.startsWith(prefix)) throw new Error(`Page escaped the web root: ${name}`);
+    return full;
+}
+
+const pages: Record<string, string> = {
+    "/": webFile("home.html"),
+    "/workspace": webFile("index.html"),
+    "/index.html": webFile("index.html"),
+    "/language.md": webFile("language.md"),
+    "/llms.txt": webFile("llms.txt"),
+    "/site.css": webFile("site.css")
+};
 
 const contentTypes: Record<string, string> = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8",
     ".json": "application/json; charset=utf-8",
-    ".map": "application/json; charset=utf-8"
+    ".map": "application/json; charset=utf-8",
+    ".md": "text/markdown; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8"
 };
 
-export function resolveRequestFile(urlPath: string): string | undefined {
-    let pathname: string;
+export function requestPathname(urlPath: string): string | undefined {
     try {
-        pathname = decodeURIComponent(new URL(urlPath, "http://localhost").pathname);
+        return decodeURIComponent(new URL(urlPath, "http://localhost").pathname);
     } catch {
         return undefined;
     }
-    if (pathname === "/" || pathname === "/index.html") return indexPath;
+}
+
+export function resolveRequestFile(urlPath: string): string | undefined {
+    const pathname = requestPathname(urlPath);
+    if (pathname === undefined) return undefined;
+    const page = pages[pathname];
+    if (page !== undefined) return page;
     if (!pathname.startsWith("/dist/")) return undefined;
     const full = resolve(distRoot, pathname.slice("/dist/".length));
     const prefix = distRoot.endsWith(sep) ? distRoot : distRoot + sep;
@@ -48,10 +72,89 @@ function sendText(response: ServerResponse, status: number, message: string): vo
     response.end(message);
 }
 
+function searchParam(urlPath: string, name: string): string | undefined {
+    try {
+        const value = new URL(urlPath, "http://localhost").searchParams.get(name);
+        if (value === null || value === "") return undefined;
+        return value;
+    } catch {
+        return undefined;
+    }
+}
+
+function escapeTextarea(source: string): string {
+    return source
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+}
+
+async function sendWorkspaceExample(response: ServerResponse, method: string, exampleId: string): Promise<void> {
+    if (!/^[a-z0-9-]{1,80}$/.test(exampleId)) {
+        sendText(response, 404, "Unknown example.");
+        return;
+    }
+    let markdown: string;
+    let html: string;
+    try {
+        markdown = await readFile(webFile("language.md"), "utf8");
+        html = await readFile(webFile("index.html"), "utf8");
+    } catch {
+        sendText(response, 500, "Server error.");
+        return;
+    }
+    const example = parascriptExamples(markdown).find((item) => item.id === exampleId);
+    const textarea = /<textarea id="code-input" spellcheck="false">[\s\S]*?<\/textarea>/;
+    if (example === undefined || !textarea.test(html)) {
+        sendText(response, example === undefined ? 404 : 500, example === undefined ? "Unknown example." : "Server error.");
+        return;
+    }
+    const page = html.replace(
+        textarea,
+        `<textarea id="code-input" spellcheck="false">${escapeTextarea(example.source)}</textarea>`
+    );
+    const body = Buffer.from(page);
+    response.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": body.length,
+        "Cache-Control": "no-store"
+    });
+    response.end(method === "HEAD" ? undefined : body);
+}
+
+async function sendLanguage(response: ServerResponse, method: string): Promise<void> {
+    let markdown: string;
+    try {
+        markdown = await readFile(webFile("language.md"), "utf8");
+    } catch {
+        sendText(response, 500, "Server error.");
+        return;
+    }
+    const body = Buffer.from(renderLanguagePage(markdown));
+    response.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": body.length,
+        "Cache-Control": "no-store"
+    });
+    response.end(method === "HEAD" ? undefined : body);
+}
+
 async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const method = request.method ?? "GET";
     if (method !== "GET" && method !== "HEAD") {
         sendText(response, 405, "Method not allowed.");
+        return;
+    }
+    const pathname = requestPathname(request.url ?? "/");
+    if (pathname === "/language") {
+        await sendLanguage(response, method);
+        return;
+    }
+    const exampleId = pathname === "/workspace" || pathname === "/index.html"
+        ? searchParam(request.url ?? "/", "example")
+        : undefined;
+    if (exampleId !== undefined) {
+        await sendWorkspaceExample(response, method, exampleId);
         return;
     }
     const filePath = resolveRequestFile(request.url ?? "/");

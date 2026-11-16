@@ -254,6 +254,11 @@ export class WebCodeGenerator {
                 return this.applyCall(callee, args);
             }
 
+            case "ComposeExpression": {
+                const left = this.generateExpression(node.left);
+                const right = this.generateExpression(node.right);
+                return `((__composed) => (${right})((${left})(__composed)))`;
+            }
             case "PipeExpression": {
                 const left = this.generateExpression(node.leftHandSide);
                 const rhsCall = node.rightHandSide;

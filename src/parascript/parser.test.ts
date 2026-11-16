@@ -90,18 +90,20 @@ test("Expose accepts a vector anchor and member access reads it", () => {
     }
 });
 
-test("Left-to-Right Chaining Expression Pipeline", () => {
+test(">> composes the left function before the right", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        def finished_cube = Cube(size: 20.0) >> fillet(radius: 2.0)
+        def adjust = shift(d: 3.0) >> scale(k: 2.0) >> round(step: 1.0)
     `;
     const parser = new Parser(source);
     const ast = parser.parse();
     const decl = ast.body[0] as any;
 
-    assert.equal(decl.value.type, "PipeExpression");
-    assert.equal(decl.value.leftHandSide.type, "CallExpression");
-    assert.equal(decl.value.rightHandSide.type, "CallExpression");
+    assert.equal(decl.value.type, "ComposeExpression");
+    assert.equal(decl.value.left.type, "ComposeExpression");
+    assert.equal(decl.value.left.left.type, "CallExpression");
+    assert.equal(decl.value.right.type, "CallExpression");
+    assert.equal(decl.value.right.callee.name, "round");
 });
 
 test("Array Primitives and Cons Operator Structural Chaining", () => {
@@ -165,12 +167,13 @@ test("Call arguments accept selector lambdas", () => {
     `;
     const parser = new Parser(source);
     const ast = parser.parse();
-    const call = (ast.body[0] as any).value.rightHandSide;
+    const call = (ast.body[0] as any).value.right;
     const selector = call.arguments[1].value;
     assert.equal(selector.type, "LambdaExpression");
     assert.equal(selector.parameter.name, "faces");
-    assert.equal(selector.body.rightHandSide.arguments[0].value.type, "LambdaExpression");
-    assert.equal(selector.body.rightHandSide.arguments[0].value.parameter.name, "f");
+    assert.equal(selector.body.type, "ComposeExpression");
+    assert.equal(selector.body.right.arguments[0].value.type, "LambdaExpression");
+    assert.equal(selector.body.right.arguments[0].value.parameter.name, "f");
 });
 
 test("Compiler Protection Blocks Discontinuity Leaks (Question Mark Parser Defeat)", () => {

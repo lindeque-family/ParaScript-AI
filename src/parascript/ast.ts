@@ -21,6 +21,7 @@ export type NodeType =
     | "UnaryExpression"
     | "TernaryLayoutExpression"
     | "PipeExpression"
+    | "ComposeExpression"
     | "CallExpression"
     | "MemberExpression"
     | "LambdaExpression"
@@ -103,6 +104,7 @@ export type ExpressionNode =
     | BinaryExpression
     | UnaryExpression
     | PipeExpression
+    | ComposeExpression
     | CallExpression
     | MemberExpression
     | LambdaExpression
@@ -171,6 +173,13 @@ export interface PipeExpression extends BaseNode {
     readonly type: "PipeExpression";
     readonly leftHandSide: ExpressionNode;
     readonly rightHandSide: CallExpression;
+}
+
+/** `f >> g` runs `f` first and passes its result to `g`. The result keeps `f`'s parameter name. */
+export interface ComposeExpression extends BaseNode {
+    readonly type: "ComposeExpression";
+    readonly left: ExpressionNode;
+    readonly right: ExpressionNode;
 }
 
 export interface CallExpression extends BaseNode {

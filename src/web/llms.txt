@@ -1,0 +1,13 @@
+# ParaScript
+
+> A language model writes language well and does not reliably produce a spatially arranged solid from a prompt. It describes the solid in ParaScript. The workspace turns that script into the solid.
+
+Read the language reference before writing a script. Write a shape once and call it wherever that shape appears, including at `export`. Do not copy its faces. The broom's handle, ferrule, and hanging hole are three calls to one `Cylinder`, and `join` turns the hole. The compiler accepts only the forms that page describes. There is no upload API: a person pastes the finished script into the workspace and presses Run solver.
+
+## Language
+
+- [ParaScript language](https://parascript.lindeque.family/language.md): Rules and complete scripts for writing a model.
+
+## Workspace
+
+- [Workspace](https://parascript.lindeque.family/workspace): Where a person pastes a script and presses Run solver.
