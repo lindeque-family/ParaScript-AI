@@ -1,7 +1,7 @@
 import { once } from "node:events";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRequestFile, startServer } from "./server.js";
+import { listenConfigFromEnv, resolveRequestFile, startServer } from "./server.js";
 
 test("resolveRequestFile serves the portal page and compiled modules", () => {
     assert.equal(resolveRequestFile("/")?.endsWith("/src/web/index.html"), true);
@@ -16,6 +16,27 @@ test("resolveRequestFile rejects paths outside dist", () => {
     assert.equal(resolveRequestFile("/dist/../package.json"), undefined);
     assert.equal(resolveRequestFile("/dist/%2e%2e/package.json"), undefined);
     assert.equal(resolveRequestFile("http://localhost/dist/../../package.json"), undefined);
+});
+
+test("listen config stays on loopback unless HOST is set", () => {
+    assert.deepEqual(listenConfigFromEnv({}), { port: 3000, host: "127.0.0.1" });
+    assert.deepEqual(listenConfigFromEnv({ HOST: "", PORT: "" }), { port: 3000, host: "127.0.0.1" });
+    assert.deepEqual(listenConfigFromEnv({ HOST: "0.0.0.0", PORT: "8080" }), { port: 8080, host: "0.0.0.0" });
+    assert.throws(() => listenConfigFromEnv({ HOST: "not a host" }), /Invalid HOST/);
+    assert.throws(() => listenConfigFromEnv({ PORT: "nope" }), /Invalid PORT/);
+});
+
+test("startServer binds the host it is given", async () => {
+    const server = startServer(0, "0.0.0.0");
+    await once(server, "listening");
+    try {
+        const address = server.address();
+        assert.equal(typeof address === "object" && address !== null ? address.address : "", "0.0.0.0");
+    } finally {
+        server.closeAllConnections();
+        server.close();
+        await once(server, "close");
+    }
 });
 
 test("server returns the workspace page and blocks traversal", async () => {

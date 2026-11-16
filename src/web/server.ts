@@ -94,6 +94,21 @@ function portFromEnv(value: string | undefined): number {
     return port;
 }
 
+function hostFromEnv(value: string | undefined): string {
+    if (value === undefined || value === "") return "127.0.0.1";
+    if (!/^[A-Za-z0-9.:%-]{1,253}$/.test(value)) {
+        throw new Error(`Invalid HOST: ${value}`);
+    }
+    return value;
+}
+
+export function listenConfigFromEnv(env: NodeJS.ProcessEnv = process.env): { port: number; host: string } {
+    return {
+        port: portFromEnv(env["PORT"]),
+        host: hostFromEnv(env["HOST"])
+    };
+}
+
 function isDirectRun(): boolean {
     const entry = process.argv[1];
     if (entry === undefined) return false;
@@ -101,9 +116,10 @@ function isDirectRun(): boolean {
 }
 
 if (isDirectRun()) {
-    const port = portFromEnv(process.env["PORT"]);
-    const server = startServer(port);
+    const { port, host } = listenConfigFromEnv();
+    const server = startServer(port, host);
     server.on("listening", () => {
-        console.log(`ParaScript portal at http://127.0.0.1:${port}`);
+        const shown = host.includes(":") ? `[${host}]` : host;
+        console.log(`ParaScript portal at http://${shown}:${port}`);
     });
 }

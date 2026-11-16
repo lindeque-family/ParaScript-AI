@@ -1,0 +1,29 @@
+# ParaScript portal for an existing Cloudflare Tunnel.
+#
+# cloudflared on this host (or with host networking):
+#   public hostname service http://127.0.0.1:3000
+#
+# cloudflared on another Docker network:
+#   delete the ports mapping, attach this service to that network,
+#   and set the public hostname service to http://portal:3000
+
+services:
+  portal:
+    build: .
+    image: parascript-portal
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - 'fetch("http://127.0.0.1:" + process.env.PORT + "/").then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
