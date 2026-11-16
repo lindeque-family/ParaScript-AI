@@ -1,6 +1,6 @@
 # Portal image. The process listens on 0.0.0.0 inside the container.
-# Publish that port on the host loopback only (see compose.yaml) and
-# point the Cloudflare Tunnel hostname at http://127.0.0.1:3000.
+# compose.yaml publishes host port 3000 on every interface, so a machine
+# on the LAN can open it. The Cloudflare hostname stays http://127.0.0.1:3000.
 
 FROM node:24-bookworm-slim AS build
 

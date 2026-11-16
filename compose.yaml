@@ -1,11 +1,6 @@
-# ParaScript portal for an existing Cloudflare Tunnel.
-#
-# cloudflared on this host (or with host networking):
-#   public hostname service http://127.0.0.1:3000
-#
-# cloudflared on another Docker network:
-#   delete the ports mapping, attach this service to that network,
-#   and set the public hostname service to http://portal:3000
+# ParaScript portal, published like the services in ~/server/docker.
+# LAN:        http://lindeque-family-server.local:3000
+# Cloudflare: http://127.0.0.1:3000
 
 services:
   portal:
@@ -16,7 +11,7 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
     healthcheck:
       test:
         - CMD
