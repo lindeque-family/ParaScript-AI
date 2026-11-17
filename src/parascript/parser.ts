@@ -4,9 +4,10 @@
 
 export type TokenType =
 
-    | "SETUP" | "PARAM" | "DEF" | "FN" | "EXPORT" | "RETURN" | "TRUE" | "FALSE"
+    | "SETUP" | "PARAMETERS" | "PARAM" | "DEF" | "FN" | "EXPORT" | "RETURN" | "TRUE" | "FALSE"
+    | "PARAMETER"
     | "MATCH" | "IDENTIFIER" | "FLOAT" | "STRING"
-    | "EQUALS" | "PIPE" | "ARROW" | "COLON" | "CONS" | "COMMA" | "DOT"
+    | "EQUALS" | "PIPE" | "PIPE_FORWARD" | "ARROW" | "COLON" | "CONS" | "COMMA" | "DOT"
     | "PLUS" | "MINUS" | "STAR" | "SLASH" | "CARET"
     | "LPAREN" | "RPAREN" | "LBRACE" | "RBRACE" | "LBRACKET" | "RBRACKET"
     | "EOF";
@@ -22,6 +23,8 @@ import type {
     ASTNode,
     Program,
     SetupBlock,
+    ParametersBlock,
+    ParameterEntry,
     ComponentExpression,
     ExportStatement,
     ExposeBlock,
@@ -35,7 +38,8 @@ import type {
     JoinDomain,
     LambdaExpression,
     Surface2DNode,
-    Solid3DNode
+    Solid3DNode,
+    TypeNode
 } from "./ast.js";
 
 // ============================================================================
@@ -88,6 +92,11 @@ export class Lexer {
             const startLine = this.line;
             const startChar = this.char;
 
+            if (current === "|" && (this.source[this.cursor + 1] || "") === ">") {
+                this.advance(); this.advance();
+                yield { type: "PIPE_FORWARD", value: "|>", line: startLine, char: startChar };
+                continue;
+            }
             if (current === ">" && (this.source[this.cursor + 1] || "") === ">") {
                 this.advance(); this.advance();
                 yield { type: "PIPE", value: ">>", line: startLine, char: startChar };
@@ -145,6 +154,19 @@ export class Lexer {
                 continue;
             }
 
+            if (current === "$") {
+                this.advance();
+                if (!/[a-zA-Z_]/.test(this.peek())) {
+                    throw new Error(`Lexer Error: Expected a parameter name after '$' at line ${this.line}, col ${this.char}`);
+                }
+                let idStr = "";
+                while (/[a-zA-Z0-9_]/.test(this.peek())) {
+                    idStr += this.advance();
+                }
+                yield { type: "PARAMETER", value: idStr, line: startLine, char: startChar };
+                continue;
+            }
+
             if (/[a-zA-Z_]/.test(current)) {
                 let idStr = "";
                 while (/[a-zA-Z0-9_]/.test(this.peek())) {
@@ -152,7 +174,7 @@ export class Lexer {
                 }
 
                 const keywordMap: Record<string, TokenType> = {
-                    setup: "SETUP", param: "PARAM", def: "DEF", fn: "FN",
+                    setup: "SETUP", parameters: "PARAMETERS", param: "PARAM", def: "DEF", fn: "FN",
                     export: "EXPORT", return: "RETURN",
                     true: "TRUE", false: "FALSE", match: "MATCH"
                 };
@@ -217,13 +239,41 @@ export class Parser {
     public parse(): Program {
         this.consume("SETUP", "Scripts must initiate with a global configuration 'setup' block.");
         const setup = this.parseSetupBlock();
+        const parameters = this.peek().type === "PARAMETERS" ? this.parseParametersBlock() : null;
 
         const body: Array<ASTNode> = [];
         while (this.peek().type !== "EOF") {
             body.push(this.parseStructuralStatement());
         }
 
-        return { type: "Program", setup, body };
+        return { type: "Program", setup, parameters, body };
+    }
+
+    /** `parameters { plate: { size: 100.0 } }`. A `{` after the colon is a nested group. */
+    private parseParametersBlock(): ParametersBlock {
+        this.consume("PARAMETERS", "Expected 'parameters'.");
+        this.consume("LBRACE", "Expected '{' to open parameters.");
+        const entries = this.parseParameterEntries();
+        this.consume("RBRACE", "Expected '}' to close parameters.");
+        return { type: "ParametersBlock", entries };
+    }
+
+    private parseParameterEntries(): Array<ParameterEntry> {
+        const entries: Array<ParameterEntry> = [];
+        while (this.peek().type !== "RBRACE" && this.peek().type !== "EOF") {
+            const name = this.parseIdentifier();
+            this.consume("COLON", "Expected ':' after the parameter name.");
+            if (this.peek().type === "LBRACE") {
+                this.advance();
+                const nested = this.parseParameterEntries();
+                this.consume("RBRACE", "Expected '}' to close the parameter group.");
+                entries.push({ type: "ParameterGroup", name, entries: nested });
+            } else {
+                entries.push({ type: "ParameterField", name, value: this.parseExpression() });
+            }
+            if (this.peek().type === "COMMA") this.advance();
+        }
+        return entries;
     }
 
     private parseSetupBlock(): SetupBlock {
@@ -252,25 +302,80 @@ export class Parser {
 
     private parseStructuralStatement(): ASTNode {
         const tok = this.peek();
+        if (tok.type === "PARAMETERS") {
+            throw new Error(`Parser Error: parameters belongs after setup. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
+        }
         if (tok.type === "PARAM") {
             this.advance();
-            const name = this.parseIdentifier();
-            this.consume("EQUALS", "Expected '=' following param allocation.");
-            const value = this.parseExpression();
-            return { type: "ParamDeclaration", name, value: value as any };
+            return this.parseDefinition("ParamDeclaration");
         }
         if (tok.type === "DEF") {
             this.advance();
-            const name = this.parseIdentifier();
-            this.consume("EQUALS", "Expected '=' following def allocation.");
-            const value = this.parseExpression();
-            return { type: "VariableDeclaration", name, value: value as any };
+            return this.parseDefinition("VariableDeclaration");
         }
         if (tok.type === "EXPORT") {
             return this.parseExportStatement();
         }
         return this.parseExpression();
     }
+    private parseDefinition(kind: "ParamDeclaration" | "VariableDeclaration"): ASTNode {
+        const name = this.parseIdentifier();
+        const signature = this.match("COLON") ? this.parseType() : undefined;
+        this.consume("EQUALS", "Expected '=' following the definition.");
+        const value = this.parseExpression() as ExpressionNode;
+        if (kind === "ParamDeclaration") {
+            return signature ? { type: kind, name, value, signature } : { type: kind, name, value };
+        }
+        return signature ? { type: kind, name, value, signature } : { type: kind, name, value };
+    }
+
+    /** A signature. `T => T => number` shares one variable across both parameters. */
+    private parseType(): TypeNode {
+        const parsed = this.parseFunctionType();
+        if (parsed.type === "NamedParameter") {
+            const tok = this.peek();
+            throw new Error(`Parser Error: Expected '=>' after the parameter type. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
+        }
+        return parsed;
+    }
+
+    private parseFunctionType(): TypeNode {
+        const left = this.parseTypeAtom();
+        if (left.type === "TypeName" && this.match("COLON")) {
+            const parameter = this.parseTypeAtom();
+            if (this.match("ARROW")) {
+                return { type: "FunctionType", paramName: left.name, parameter, returnType: this.parseFunctionType() };
+            }
+            return { type: "NamedParameter", name: left.name, parameter };
+        }
+        if (left.type === "NamedParameter") {
+            this.consume("ARROW", "Expected '=>' after the parameter type.");
+            return { type: "FunctionType", paramName: left.name, parameter: left.parameter, returnType: this.parseFunctionType() };
+        }
+        if (this.match("ARROW")) {
+            return { type: "FunctionType", paramName: null, parameter: left, returnType: this.parseFunctionType() };
+        }
+        return left;
+    }
+
+    private parseTypeAtom(): TypeNode {
+        if (this.match("LPAREN")) {
+            const inner = this.parseFunctionType();
+            this.consume("RPAREN", "Expected ')' after the type.");
+            return inner;
+        }
+        if (this.match("LBRACKET")) {
+            const element = this.parseFunctionType();
+            this.consume("RBRACKET", "Expected ']' after the list type.");
+            return { type: "ListType", element };
+        }
+        if (this.peek().type === "IDENTIFIER") {
+            return { type: "TypeName", name: this.advance().value };
+        }
+        const tok = this.peek();
+        throw new Error(`Parser Error: Expected a type. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
+    }
+
     private parseExportStatement(): ExportStatement {
         this.advance();
         this.consume("LPAREN", "Expected '(' after export.");
@@ -319,7 +424,16 @@ export class Parser {
         return { type: "ExposeBlock", properties };
     }
     private parseExpression(): ExpressionNode {
-        return this.parsePipeExpression();
+        return this.parseForwardExpression();
+    }
+    // `|>` sends a value into a function. `>>` binds tighter, so `x |> f >> g` pipes into the composition.
+    private parseForwardExpression(): ExpressionNode {
+        let expr = this.parsePipeExpression();
+        while (this.match("PIPE_FORWARD")) {
+            const right = this.parsePipeExpression();
+            expr = { type: "PipeExpression", leftHandSide: expr, rightHandSide: right };
+        }
+        return expr;
     }
     private parsePipeExpression(): ExpressionNode {
         let expr = this.parseConsExpression();
@@ -382,6 +496,10 @@ export class Parser {
 
     private parseAtom(): ExpressionNode {
         const tok = this.peek();
+        if (tok.type === "PARAMETER") {
+            this.advance();
+            return { type: "ParameterReference", name: tok.value };
+        }
         if (tok.type === "MATCH") {
             return this.parseArrayMatchExpression();
         }
@@ -439,6 +557,10 @@ export class Parser {
                 return { type: "CallExpression", callee: id, arguments: args };
             }
             return id;
+        }
+        if (tok.type === "TRUE" || tok.type === "FALSE") {
+            this.advance();
+            return { type: "BooleanLiteral", value: tok.type === "TRUE" };
         }
         if (tok.type === "FLOAT") {
             this.advance();

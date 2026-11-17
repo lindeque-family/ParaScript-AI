@@ -47,18 +47,21 @@ def Disk = radius => z => Surface2D(
     )
 )
 
-// One round solid. up is its axis. bottom, center, and top sit on that axis.
+// The round wall. This is a face, the same kind of 2D surface as Disk.
+def Tube = radius => height => Surface2D(
+    max_u: 2.0 * pi,
+    min_v: u => 0.0, max_v: u => height,
+    formula: u => v => Vector(
+        x: radius * cos(rad: u),
+        y: radius * sin(rad: u),
+        z: v
+    )
+)
+
+// One round solid: one tube and two disks. up is its axis. bottom, center, and top sit on that axis.
 def Cylinder = radius => height => Component(
     solid: Solid3D(faces: [
-        Surface2D(
-            max_u: 2.0 * pi,
-            min_v: u => 0.0, max_v: u => height,
-            formula: u => v => Vector(
-                x: radius * cos(rad: u),
-                y: radius * sin(rad: u),
-                z: v
-            )
-        ),
+        Tube(radius: radius, height: height),
         Disk(radius: radius, z: 0.0),
         Disk(radius: radius, z: height)
     ]),

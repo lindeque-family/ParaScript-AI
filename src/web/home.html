@@ -31,7 +31,8 @@
         </p>
         <section id="for-a-language-model">
             <h2>For a language model</h2>
-            <p>Read <a href="/language.md">/language.md</a> before writing a script. That page is the language this compiler accepts. The same explanation for a person is <a href="/language">/language</a>.</p>
+            <p>Read <a href="/language.md">/language.md</a> before writing a script. That page is the language this compiler accepts, and it starts with the guidance for a language model: the file's sizes live in <code>parameters</code>, <code>pi</code> is the shared constant, a cylinder is one <code>Tube</code> and two <code>Disk</code> faces, a plate is a square <code>Box</code>, <code>|&gt;</code> pipes a value, and a pattern reads the anchors of the base part it is given. The same explanation for a person is <a href="/language">/language</a>.</p>
+            <p>The lessons on that page are: write each face and each solid once, a plate is a square <code>Box</code>, <code>rectangular_pattern</code> returns the grid of points, and <code>map</code> builds a cylinder per point so the radius and height can follow the location. <code>subtract_cylinders</code> cuts that list out of the plate. <a href="/llms.txt">/llms.txt</a> lists the same lessons.</p>
             <p>The index of these pages is <a href="/llms.txt">/llms.txt</a>. There is no upload API. Write the script, then a person pastes it into <a href="/workspace">/workspace</a> and presses Run solver.</p>
         </section>
     </main>

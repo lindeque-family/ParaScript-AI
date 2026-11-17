@@ -135,12 +135,16 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(referenceHtml, /export\(HollowBox\(w: 100\.0, d: 50\.0, h: 30\.0, wall: 3\.0\)\)/);
         assert.match(referenceHtml, /export\(Sphere\(radius: 25\.0\)\)/);
         assert.match(referenceHtml, /export\(Broom\)/);
-        assert.equal(referenceHtml.match(/Open in workspace/g)?.length, 4);
+        assert.match(referenceHtml, /export\(patterned_plate\(/);
+        assert.equal(referenceHtml.match(/Open in workspace/g)?.length, 5);
         assert.match(referenceHtml, /href="\/workspace\?example=closed-box"/);
         assert.match(referenceHtml, /href="\/workspace\?example=box-with-a-cavity"/);
         assert.match(referenceHtml, /href="\/workspace\?example=sphere"/);
         assert.match(referenceHtml, /href="\/workspace\?example=broom"/);
+        assert.match(referenceHtml, /href="\/workspace\?example=patterned-plate"/);
         assert.match(referenceHtml, /The handle, the ferrule, and the hole through the handle are three calls/);
+        assert.match(referenceHtml, /Tube\(radius: radius, height: height\)/);
+        assert.match(referenceHtml, /Box\(width: size, depth: size, height: thickness\)/);
         assert.match(referenceHtml, /Disk\(radius: radius, z: 0\.0\)/);
         assert.match(referenceHtml, /Disk\(radius: radius, z: height\)/);
         assert.match(referenceHtml, /Cylinder\(radius: handle_r, height: handle_len\)/);
@@ -153,6 +157,17 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(markdown.headers.get("content-type") ?? "", /text\/markdown/);
         const markdownText = await markdown.text();
         assert.match(markdownText, /shift\(d: 3\.0\) >> scale\(k: 2\.0\)/);
+        assert.match(markdownText, /def patterned_plate = cut_holes >> add_pins/);
+        assert.match(markdownText, /\[1\.0, 2\.0, 3\.0\] \|> map\(f: item => item \* 2\.0\)/);
+        assert.match(markdownText, /`\|>` pipes a value into a function/);
+        assert.match(markdownText, /## Guidance for a language model/);
+        assert.match(markdownText, /## Lessons/);
+        assert.match(markdownText, /T => T => number/);
+        assert.match(markdownText, /parameters \{/);
+        assert.match(markdownText, /\$plate\.size/);
+        assert.match(markdownText, /The patterned plate is the form to copy/);
+        assert.match(markdownText, /subtract_cylinders` cuts that list/);
+        assert.match(markdownText, /CylinderAt/);
         assert.match(markdownText, /```parascript/);
         assert.match(markdownText, /Surface2D/);
 
@@ -162,6 +177,12 @@ test("server returns the workspace page and blocks traversal", async () => {
         const indexText = await index.text();
         assert.match(indexText, /\/language\.md/);
         assert.match(indexText, /three calls to one/);
+        assert.match(indexText, /Guidance for a language model/);
+        assert.match(indexText, /plate\.origin/);
+        assert.match(indexText, /## Lessons/);
+        assert.match(indexText, /rectangular_pattern/);
+        assert.match(indexText, /parameters/);
+        assert.match(indexText, /subtract_cylinders/);
 
         const style = await fetch(`${base}/site.css`);
         assert.equal(style.status, 200);

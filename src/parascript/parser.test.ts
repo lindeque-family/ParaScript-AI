@@ -45,6 +45,64 @@ test("Variable Declaration and Curried Lambda Trajectories", () => {
     assert.equal(decl.value.formula.parameter.name, "t");
 });
 
+test("a def may declare a signature with a shared type variable", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def same: T => T => number = x => y => 1.0
+    `;
+    const parser = new Parser(source);
+    const decl = parser.parse().body[0] as VariableDeclaration;
+    const signature = decl.signature;
+    assert.ok(signature);
+    assert.equal(signature.type, "FunctionType");
+    if (signature.type !== "FunctionType" || signature.returnType.type !== "FunctionType") return;
+    assert.equal(signature.paramName, null);
+    assert.equal(signature.parameter.type, "TypeName");
+    assert.equal(signature.returnType.parameter.type, "TypeName");
+    if (signature.parameter.type === "TypeName" && signature.returnType.parameter.type === "TypeName") {
+        assert.equal(signature.parameter.name, "T");
+        assert.equal(signature.returnType.parameter.name, "T");
+    }
+    assert.equal(signature.returnType.returnType.type, "TypeName");
+});
+
+test("parameters is a hierarchy after setup", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        parameters {
+            plate: {
+                size: 100.0,
+                thickness: size / 12.0
+            },
+            holes: {
+                pitch: $plate.size / 8.0
+            }
+        }
+        def width = $plate.size
+    `;
+    const ast = new Parser(source).parse();
+    assert.ok(ast.parameters);
+    assert.equal(ast.parameters.entries.length, 2);
+    const plate = ast.parameters.entries[0];
+    assert.equal(plate?.type, "ParameterGroup");
+    if (plate?.type !== "ParameterGroup") return;
+    assert.equal(plate.name.name, "plate");
+    assert.equal(plate.entries[1]?.type, "ParameterField");
+    assert.equal(ast.body[0]?.type, "VariableDeclaration");
+    const width = ast.body[0];
+    if (width?.type === "VariableDeclaration" && width.value.type === "MemberExpression") {
+        assert.equal(width.value.object.type, "ParameterReference");
+    }
+});
+
+test("parameters belongs after setup", () => {
+    assert.throws(() => new Parser(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def pi = 3.0
+        parameters { plate: { size: 1.0 } }
+    `).parse(), /parameters belongs after setup/);
+});
+
 test("component returns a part and publishes its anchors", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
@@ -88,6 +146,26 @@ test("Expose accepts a vector anchor and member access reads it", () => {
         assert.equal(decl.value.property, "cavity");
         assert.equal(decl.value.object.type, "Identifier");
     }
+});
+
+test("|> pipes a value into the next argument, left to right", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def drilled = grid |> map(f: item => item) |> chain(start: plate)
+        def adjusted = 4.0 |> shift(d: 3.0) >> scale(k: 2.0)
+    `;
+    const parser = new Parser(source);
+    const ast = parser.parse();
+    const drilled = (ast.body[0] as any).value;
+    assert.equal(drilled.type, "PipeExpression");
+    assert.equal(drilled.leftHandSide.type, "PipeExpression");
+    assert.equal(drilled.leftHandSide.leftHandSide.name, "grid");
+    assert.equal(drilled.rightHandSide.callee.name, "chain");
+
+    const adjusted = (ast.body[1] as any).value;
+    assert.equal(adjusted.type, "PipeExpression");
+    assert.equal(adjusted.leftHandSide.type, "FloatLiteral");
+    assert.equal(adjusted.rightHandSide.type, "ComposeExpression");
 });
 
 test(">> composes the left function before the right", () => {

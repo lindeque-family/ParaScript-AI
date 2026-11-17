@@ -12,7 +12,9 @@ export type NodeType =
     | "ExposeBlock"
     | "ExposeProperty"
     | "Identifier"
+    | "ParameterReference"
     | "FloatLiteral"
+    | "BooleanLiteral"
     | "StringLiteral"
     | "VectorLiteral"
     | "ArrayLiteral"
@@ -40,7 +42,28 @@ export interface BaseNode {
 export interface Program extends BaseNode {
     readonly type: "Program";
     readonly setup: SetupBlock;
+    readonly parameters: ParametersBlock | null;
     readonly body: Array<ASTNode>;
+}
+
+/** The file's knobs, immediately after `setup`. A group nests further groups and fields. */
+export interface ParametersBlock {
+    readonly type: "ParametersBlock";
+    readonly entries: Array<ParameterEntry>;
+}
+
+export type ParameterEntry = ParameterGroup | ParameterField;
+
+export interface ParameterGroup {
+    readonly type: "ParameterGroup";
+    readonly name: Identifier;
+    readonly entries: Array<ParameterEntry>;
+}
+
+export interface ParameterField {
+    readonly type: "ParameterField";
+    readonly name: Identifier;
+    readonly value: ExpressionNode;
 }
 
 export interface SetupBlock extends BaseNode {
@@ -53,6 +76,7 @@ export interface ParamDeclaration extends BaseNode {
     readonly type: "ParamDeclaration";
     readonly name: Identifier;
     readonly value: ASTNode;
+    readonly signature?: TypeNode;
 }
 
 export interface ExportStatement extends BaseNode {
@@ -64,7 +88,15 @@ export interface VariableDeclaration extends BaseNode {
     readonly type: "VariableDeclaration";
     readonly name: Identifier;
     readonly value: ASTNode;
+    readonly signature?: TypeNode;
 }
+
+/** A type written on a definition. A repeated name is one type variable. */
+export type TypeNode =
+    | { readonly type: "TypeName"; readonly name: string }
+    | { readonly type: "ListType"; readonly element: TypeNode }
+    | { readonly type: "NamedParameter"; readonly name: string; readonly parameter: TypeNode }
+    | { readonly type: "FunctionType"; readonly paramName: string | null; readonly parameter: TypeNode; readonly returnType: TypeNode };
 
 /** `Component(solid:, expose:)` returns a component. `expose` publishes its anchors. */
 export interface ComponentExpression extends BaseNode {
@@ -96,7 +128,9 @@ export interface ExposeProperty extends BaseNode {
 
 export type ExpressionNode =
     | Identifier
+    | ParameterReference
     | FloatLiteral
+    | BooleanLiteral
     | StringLiteral
     | VectorLiteral
     | ArrayLiteral
@@ -119,9 +153,20 @@ export interface Identifier extends BaseNode {
     readonly name: string;
 }
 
+/** `$plate` reads the parameter group, even when a solid is also named `plate`. */
+export interface ParameterReference extends BaseNode {
+    readonly type: "ParameterReference";
+    readonly name: string;
+}
+
 export interface FloatLiteral extends BaseNode {
     readonly type: "FloatLiteral";
     readonly value: number;
+}
+
+export interface BooleanLiteral extends BaseNode {
+    readonly type: "BooleanLiteral";
+    readonly value: boolean;
 }
 
 export interface StringLiteral extends BaseNode {
@@ -169,10 +214,11 @@ export interface UnaryExpression extends BaseNode {
     readonly argument: ExpressionNode;
 }
 
+/** `value |> fn` fills `fn`'s next argument with `value`. */
 export interface PipeExpression extends BaseNode {
     readonly type: "PipeExpression";
     readonly leftHandSide: ExpressionNode;
-    readonly rightHandSide: CallExpression;
+    readonly rightHandSide: ExpressionNode;
 }
 
 /** `f >> g` runs `f` first and passes its result to `g`. The result keeps `f`'s parameter name. */

@@ -8,7 +8,8 @@ export type Type =
     | ComponentType
     | SeatedSolid3DType
     | ArrayType
-    | FunctionType;
+    | FunctionType
+    | RecordType;
 
 export interface TypeVariable {
     readonly tag: "Variable";
@@ -17,13 +18,18 @@ export interface TypeVariable {
 }
 
 export interface PrimitiveType {
-    readonly tag: "Float" | "String" | "Vector" | "Curve1D" | "Surface2D" | "Solid3D" | "Meet" | "ConstraintSet";
+    readonly tag: "Float" | "String" | "Boolean" | "Vector" | "Curve1D" | "Surface2D" | "Solid3D" | "Meet" | "ConstraintSet";
 }
 
-/** A component publishes the anchors in its expose block. A join is a solid and carries none. */
+/**
+ * A component publishes the anchors in its expose block. A join is a solid and carries none.
+ * `open` means this is a component received as an argument: `anchors` is the set read so far,
+ * and the value passed in must expose every one of them.
+ */
 export interface ComponentType {
     readonly tag: "Component";
-    readonly anchors: readonly string[];
+    anchors: string[];
+    readonly open?: boolean;
 }
 
 /** The two solids inside `combine`. `+` and `-` are defined only for this type. */
@@ -41,6 +47,12 @@ export interface FunctionType {
     readonly paramName: string; // Enforces named keyword argument contracts
     readonly parameter: Type;
     readonly returnType: Type;
+}
+
+/** A `parameters` group. `.` reads a field by name. */
+export interface RecordType {
+    readonly tag: "Record";
+    readonly fields: Array<{ readonly name: string; readonly fieldType: Type }>;
 }
 
 export class TypeSchema {
@@ -73,6 +85,7 @@ export function createFreshVariable(): TypeVariable {
 
 export const tFloat: PrimitiveType = { tag: "Float" };
 export const tString: PrimitiveType = { tag: "String" };
+export const tBool: PrimitiveType = { tag: "Boolean" };
 export const tVector: PrimitiveType = { tag: "Vector" };
 export const tComponent: ComponentType = { tag: "Component", anchors: [] };
 export const tCurve1D: PrimitiveType = { tag: "Curve1D" };

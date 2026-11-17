@@ -193,6 +193,130 @@ test("Enforces Let-Polymorphism Generalisation and Multiple Instantiation", () =
     assert.equal(vectorType.tag, "Vector");
 });
 
+test("a repeated name in a signature is one type variable", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def same: T => T => number = x => y => 1.0
+        def floats = same(x: 1.0, y: 2.0)
+        def vectors = same(x: Vector(x: 0.0, y: 0.0, z: 0.0), y: Vector(x: 1.0, y: 0.0, z: 0.0))
+        def different: A => B => number = x => y => 1.0
+        def mixed = different(x: 1.0, y: Vector(x: 0.0, y: 0.0, z: 0.0))
+    `;
+    const env = inferSourceEnvironment(source);
+    assert.equal(prune(env.lookup("floats").type).tag, "Float");
+    assert.equal(prune(env.lookup("vectors").type).tag, "Float");
+    assert.equal(prune(env.lookup("mixed").type).tag, "Float");
+});
+
+test("a shared signature variable rejects a call with two types", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def same: T => T => number = x => y => 1.0
+        def mixed = same(x: 1.0, y: Vector(x: 0.0, y: 0.0, z: 0.0))
+    `;
+    assert.throws(() => inferSourceEnvironment(source), /Structural Unification Mismatch/);
+});
+
+test("a signature is checked against the body", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def id: T => number = x => Vector(x: 0.0, y: 0.0, z: 0.0)
+    `;
+    assert.throws(() => inferSourceEnvironment(source), /'id' does not match its signature/);
+});
+
+test("a named signature parameter must match the value", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def map: (item: T => U) => (list: [T]) => [U] = f => list => match list {
+            [] => [],
+            head :: tail => f(item: head) :: map(f: f, list: tail)
+        }
+        def numbers = map(f: item => item * 2.0, list: [1.0, 2.0])
+        def points = map(f: item => Vector(x: item, y: 0.0, z: 0.0), list: [1.0, 2.0])
+    `;
+    const env = inferSourceEnvironment(source);
+    const numbers = prune(env.lookup("numbers").type);
+    const points = prune(env.lookup("points").type);
+    assert.equal(numbers.tag, "Array");
+    assert.equal(points.tag, "Array");
+    if (numbers.tag === "Array") assert.equal(prune(numbers.elementType).tag, "Float");
+    if (points.tag === "Array") assert.equal(prune(points.elementType).tag, "Vector");
+
+    const mismatch = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def same: a: T => b: T => number = x => y => 1.0
+    `;
+    assert.throws(() => inferSourceEnvironment(mismatch), /'same' does not match its signature/);
+});
+
+test("a parameters group is a record and a later field can read an earlier one", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        parameters {
+            plate: {
+                size: 100.0,
+                thickness: size / 12.0,
+                holes: { pitch: size / 8.0 }
+            },
+            span: $plate.holes.pitch
+        }
+        def width = $plate.size
+        def pitch = $plate.holes.pitch
+        def measured = $span
+    `;
+    const env = inferSourceEnvironment(source);
+    assert.equal(prune(env.lookup("width").type).tag, "Float");
+    assert.equal(prune(env.lookup("pitch").type).tag, "Float");
+    assert.equal(prune(env.lookup("measured").type).tag, "Float");
+    assert.throws(() => env.lookup("plate"), /Unbound identifier/);
+});
+
+test("a missing parameter field is an error", () => {
+    assert.throws(() => inferSourceEnvironment(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        parameters { plate: { size: 100.0 } }
+        def missing = $plate.depth
+    `), /depth is not a field of this parameter/);
+});
+
+test("a parameter name is bound once in its group", () => {
+    assert.throws(() => inferSourceEnvironment(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        parameters { plate: { size: 1.0, size: 2.0 } }
+    `), /'size' is already a parameter in this group/);
+});
+
+test("a parameter field and a component anchor are different reads", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        parameters { plate: { size: 100.0 } }
+        def Mark = Component(
+            solid: Solid3D(faces: [Surface2D(max_u: $plate.size, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))]),
+            expose: { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
+        )
+        def width = $plate.size
+        def origin = Mark.origin
+        def same_name = plate => $plate.size
+    `;
+    const env = inferSourceEnvironment(source);
+    assert.equal(prune(env.lookup("width").type).tag, "Float");
+    assert.equal(prune(env.lookup("origin").type).tag, "Vector");
+    const sameName = prune(env.lookup("same_name").type);
+    assert.equal(sameName.tag, "Function");
+    if (sameName.tag === "Function") assert.equal(prune(sameName.returnType).tag, "Float");
+    assert.throws(() => inferSourceEnvironment(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        parameters { plate: { size: 100.0 } }
+        def bare = plate
+    `), /Unbound identifier/);
+    assert.throws(() => inferSourceEnvironment(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        parameters { plate: { size: 100.0 } }
+        def missing = $holes
+    `), /'\$holes' is not a parameter/);
+});
+
 // ----------------------------------------------------------------------------
 // 7. Polymorphic Array Structure Verification
 // ----------------------------------------------------------------------------
@@ -370,6 +494,62 @@ test("A join seats parts by the anchors they expose", () => {
     const outer = prune(env.lookup("Outer").type);
     assert.equal(outer.tag, "Component");
     if (outer.tag === "Component") assert.deepEqual([...outer.anchors], ["up", "right", "cavity", "mating_crosshair"]);
+});
+
+test("a function may join the component it receives", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def Block = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))
+            ]),
+            expose: { up: Vector(x: 0.0, y: 0.0, z: 1.0) }
+        )
+        def cut = host => Component(
+            solid: join(frame: host, placed: Block, using: frame => placed => align(
+                planar: meet(frame: Vector(x: 0.0, y: 0.0, z: 1.0), placed: Vector(x: 0.0, y: 0.0, z: 1.0)),
+                translation: meet(frame: Vector(x: 0.0, y: 0.0, z: 0.0), placed: Vector(x: 0.0, y: 0.0, z: 0.0)),
+                rotation: meet(frame: Vector(x: 1.0, y: 0.0, z: 0.0), placed: Vector(x: 1.0, y: 0.0, z: 0.0))
+            ), combine: frame => placed => frame - placed),
+            expose: { up: Vector(x: 0.0, y: 0.0, z: 1.0) }
+        )
+        def done = cut(host: Block)
+        export(done)
+    `;
+    const env = inferSourceEnvironment(source);
+    assert.equal(prune(env.lookup("done").type).tag, "Component");
+});
+
+test("a function may read the anchors of the component it receives", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def Mark = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))
+            ]),
+            expose: {
+                origin: Vector(x: 0.0, y: 0.0, z: 0.0),
+                top: Vector(x: 0.0, y: 0.0, z: 1.0)
+            }
+        )
+        def read = part => part.origin + part.top
+        def point = read(part: Mark)
+    `;
+    const env = inferSourceEnvironment(source);
+    assert.equal(prune(env.lookup("point").type).tag, "Vector");
+    assert.throws(() => {
+        inferSourceEnvironment(`
+            setup { units: "mm", coordinate_system: "Z-up" }
+            def Mark = Component(
+                solid: Solid3D(faces: [
+                    Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))
+                ]),
+                expose: { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
+            )
+            def read = part => part.origin + part.top
+            def point = read(part: Mark)
+        `);
+    }, /top is not an anchor on this component/);
 });
 
 test("Member access only reads an exposed anchor", () => {

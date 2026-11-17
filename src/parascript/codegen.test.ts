@@ -91,6 +91,89 @@ test(">> runs the left function first and keeps its parameter name", () => {
     `), />> composes two functions/);
 });
 
+test("|> fills the function's next argument", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def sum = list => match list {
+            [] => 0.0,
+            head :: tail => head + sum(list: tail)
+        }
+        def shift = d => x => x + d
+        def scale = k => x => k * x
+        def numbers = [1.0, 2.0, 3.0]
+            |> map(f: item => item * 2.0)
+            |> filter(predicate: item => true)
+        def Mark = Component(
+            solid: Solid3D(faces: [
+                Surface2D(
+                    max_u: sum(list: numbers) + (4.0 |> shift(d: 3.0) >> scale(k: 2.0)),
+                    min_v: u => 0.0, max_v: u => 1.0,
+                    formula: u => v => Vector(x: u, y: v, z: 0.0)
+                )
+            ]),
+            expose: { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
+        )
+        export(Mark)
+    `;
+    inferSourceEnvironment(source);
+    const generatedJs = new WebCodeGenerator().generate(new Parser(source).parse());
+    const mark = new Function(`${generatedJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
+    assert.equal(mark.geometry.faces[0].maxU, 26);
+    assert.throws(() => inferSourceEnvironment(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def bad = 1.0 |> 2.0
+        export(Mark)
+    `), /\|> pipes a value into a function/);
+});
+
+test("map and filter are standard list functions", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def sum = list => match list {
+            [] => 0.0,
+            head :: tail => head + sum(list: tail)
+        }
+        def doubled = map(f: item => item * 2.0, list: [1.0, 2.0, 3.0])
+        def shifted = map(f: item => Vector(x: item, y: 0.0, z: 0.0), list: [4.0, 5.0])
+        def kept = filter(predicate: item => true, list: [10.0])
+        def dropped = filter(predicate: item => false, list: [100.0])
+        def Mark = Component(
+            solid: Solid3D(faces: [
+                Surface2D(
+                    max_u: sum(list: doubled) + sum(list: kept) + sum(list: dropped),
+                    min_v: u => 0.0, max_v: u => 1.0,
+                    formula: u => v => Vector(x: u, y: v, z: 0.0)
+                )
+            ]),
+            expose: { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
+        )
+        export(Mark)
+    `;
+    inferSourceEnvironment(source);
+    const generatedJs = new WebCodeGenerator().generate(new Parser(source).parse());
+    const mark = new Function(`${generatedJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
+    assert.equal(mark.geometry.faces[0].maxU, 22);
+    const rejected = `
+        def Mark = Component(
+            solid: Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: 0.0, y: 0.0, z: 0.0))
+            ]),
+            expose: {}
+        )
+        export(Mark)
+    `;
+    assert.throws(() => inferSourceEnvironment(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def bad = map(f: value => value, list: [1.0])
+        ${rejected}
+    `), /Keyword Argument Mismatch/);
+    assert.throws(() => inferSourceEnvironment(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def bad = filter(predicate: item => item, list: [1.0])
+        ${rejected}
+    `), /Structural Unification Mismatch/);
+});
+
 test("a call applies each argument of a curried function", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
@@ -103,6 +186,37 @@ test("a call applies each argument of a curried function", () => {
     assert.match(generatedJs, /env\.box\(10\)\(4\)\(7\)/);
     const sum = new Function(`${generatedJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
     assert.equal(sum, 21);
+});
+
+test("a parameter field is the value the script reads", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        parameters {
+            plate: {
+                size: 100.0,
+                thickness: size / 10.0,
+                holes: {
+                    pitch: size / 8.0,
+                    size: size / 2.0
+                }
+            }
+        }
+        def Mark = Component(
+            solid: Solid3D(faces: [
+                Surface2D(
+                    max_u: $plate.thickness + $plate.holes.pitch + $plate.holes.size,
+                    min_v: u => 0.0, max_v: u => 1.0,
+                    formula: u => v => Vector(x: u, y: v, z: 0.0)
+                )
+            ]),
+            expose: { origin: Vector(x: 0.0, y: 0.0, z: 0.0) }
+        )
+        export(Mark)
+    `;
+    inferSourceEnvironment(source);
+    const generatedJs = new WebCodeGenerator().generate(new Parser(source).parse());
+    const mark = new Function(`${generatedJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
+    assert.equal(mark.geometry.faces[0].maxU, 72.5);
 });
 
 test("Code Generator Handles Overloaded Geometric Composition and Mating Operators", () => {

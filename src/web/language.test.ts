@@ -10,9 +10,11 @@ test("language reference examples compile and mesh", async () => {
     const examples = [...markdown.matchAll(/```parascript\n([\s\S]*?)```/g)].map((match) => match[1] ?? "");
     const sphere = readFileSync(fileURLToPath(new URL("../../examples/sphere.psai", import.meta.url)), "utf8");
     const broom = readFileSync(fileURLToPath(new URL("../../examples/broom.psai", import.meta.url)), "utf8");
-    assert.equal(examples.length, 4);
+    const plate = readFileSync(fileURLToPath(new URL("../../examples/plate.psai", import.meta.url)), "utf8");
+    assert.equal(examples.length, 5);
     assert.ok(examples.includes(sphere));
     assert.ok(examples.includes(broom));
+    assert.ok(examples.includes(plate));
     for (const source of examples) {
         const result = compileParaScriptSource(source);
         assert.equal(result.success, true, result.errorMessage ?? source.slice(0, 120));

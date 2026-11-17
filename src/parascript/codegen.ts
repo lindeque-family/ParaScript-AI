@@ -2,13 +2,16 @@
 // PARASCRIPT AI WEB TRANSPILED CODE GENERATOR KERNEL (v14.0.0)
 // ============================================================================
 
-import type { ASTNode, Program, ExpressionNode, Identifier } from "./ast.js";
+import type { ASTNode, Program, ExpressionNode, Identifier, ParameterEntry } from "./ast.js";
 
 export class WebCodeGenerator {
     private indentLevel = 0;
     private scopeDepth = 0;
     private scopeName = "env";
+    private parameterValueId = 0;
     private readonly locals: string[] = [];
+    /** Parameter fields in the group being generated. The emitted name is a unique const. */
+    private readonly aliases: Array<{ name: string; emitted: string }> = [];
 
     public generate(program: Program): string {
         let js = `// ============================================================================\n`;
@@ -35,8 +38,30 @@ export class WebCodeGenerator {
         js += this.indent(`    const found = resolved && resolved.tag === "Part" && resolved.anchors ? resolved.anchors[name] : undefined;\n`);
         js += this.indent(`    if (!found || typeof found.x !== "number" || typeof found.y !== "number" || typeof found.z !== "number") throw new Error("This part has no anchor '" + name + "'.");\n`);
         js += this.indent(`    return found;\n`);
+        js += this.indent(`};\n`);
+        js += this.indent(`const member = (part, name) => {\n`);
+        js += this.indent(`    const resolved = typeof part === "function" ? part() : part;\n`);
+        js += this.indent(`    if (resolved && resolved.tag === "Record") {\n`);
+        js += this.indent(`        if (!Object.prototype.hasOwnProperty.call(resolved.fields, name)) throw new Error("This parameter has no field '" + name + "'.");\n`);
+        js += this.indent(`        return resolved.fields[name];\n`);
+        js += this.indent(`    }\n`);
+        js += this.indent(`    return anchorOf(part, name);\n`);
         js += this.indent(`};\n\n`);
 
+        js += this.indent(`env.map = (f) => (list) => {\n`);
+        js += this.indent(`    if (typeof f !== "function") throw new Error("map needs a function.");\n`);
+        js += this.indent(`    if (!Array.isArray(list)) throw new Error("map needs a list.");\n`);
+        js += this.indent(`    return list.map((item) => f(item));\n`);
+        js += this.indent(`};\n`);
+        js += this.indent(`env.filter = (predicate) => (list) => {\n`);
+        js += this.indent(`    if (typeof predicate !== "function") throw new Error("filter needs a function.");\n`);
+        js += this.indent(`    if (!Array.isArray(list)) throw new Error("filter needs a list.");\n`);
+        js += this.indent(`    return list.filter((item) => {\n`);
+        js += this.indent(`        const keep = predicate(item);\n`);
+        js += this.indent(`        if (keep !== true && keep !== false) throw new Error("filter predicate needs true or false.");\n`);
+        js += this.indent(`        return keep;\n`);
+        js += this.indent(`    });\n`);
+        js += this.indent(`};\n`);
         js += this.indent(`env.meet = (frame) => (placed) => ({ tag: "Meet", frame, placed });\n`);
         js += this.indent(`env.align = (planar) => (translation) => (rotation) => ({ tag: "ConstraintSet", type: "align", planar, translation, rotation });\n`);
         js += this.indent(`const applyMate = (fn, framePart, placedPart) => {\n`);
@@ -118,6 +143,8 @@ export class WebCodeGenerator {
         js += this.indent(`    return walk(placedSolid);\n`);
         js += this.indent(`};\n\n`);
 
+        if (program.parameters) js += this.generateParameters(program.parameters.entries);
+
         for (const statement of program.body) {
             js += this.generateStatement(statement);
         }
@@ -155,10 +182,20 @@ export class WebCodeGenerator {
             case "Identifier": {
                 if (node.name === "PI") return "Math.PI";
                 if (this.locals.includes(node.name)) return node.name;
+                for (let index = this.aliases.length - 1; index >= 0; index--) {
+                    const alias = this.aliases[index];
+                    if (alias && alias.name === node.name) return alias.emitted;
+                }
                 return `${this.scopeName}.${node.name}`;
+            }
+            case "ParameterReference": {
+                return `env.${node.name}`;
             }
             case "FloatLiteral": {
                 return node.value.toString();
+            }
+            case "BooleanLiteral": {
+                return node.value ? "true" : "false";
             }
             case "StringLiteral": {
                 return `"${node.value.replace(/"/g, '\\"')}"`;
@@ -238,7 +275,7 @@ export class WebCodeGenerator {
             }
             case "MemberExpression": {
                 const object = this.generateExpression(node.object);
-                return `anchorOf(${object}, ${JSON.stringify(node.property)})`;
+                return `member(${object}, ${JSON.stringify(node.property)})`;
             }
             case "CallExpression": {
                 const calleeName = node.callee.name;
@@ -261,11 +298,8 @@ export class WebCodeGenerator {
             }
             case "PipeExpression": {
                 const left = this.generateExpression(node.leftHandSide);
-                const rhsCall = node.rightHandSide;
-                const callee = this.generateExpression(rhsCall.callee);
-                const explicitArgs = rhsCall.arguments.map(arg => this.generateExpression(arg.value));
-                // The piped value is the function's last parameter.
-                return this.applyCall(callee, [...explicitArgs, left]);
+                const right = this.generateExpression(node.rightHandSide);
+                return `(${right})(${left})`;
             }
             case "Curve1DNode": {
                 const maxT = this.generateExpression(node.maxT);
@@ -293,9 +327,14 @@ export class WebCodeGenerator {
             case "ArrayMatchStatement": {
                 const target = this.generateExpression(node.targetArray);
                 const onEmpty = this.generateExpression(node.onEmpty);
-                const onSplit = this.generateExpression(node.onSplit);
-                
-                // Transpiles pattern match logic into a lightning fast JavaScript ternary closure evaluation
+                this.locals.push(node.headIdentifier.name, node.tailIdentifier.name);
+                let onSplit: string;
+                try {
+                    onSplit = this.generateExpression(node.onSplit);
+                } finally {
+                    this.locals.pop();
+                    this.locals.pop();
+                }
                 return `((() => { const _t = ${target}; if (_t.length === 0) return ${onEmpty}; const ${node.headIdentifier.name} = _t[0]; const ${node.tailIdentifier.name} = _t.slice(1); return ${onSplit}; })())`;
             }
         }
@@ -305,6 +344,39 @@ export class WebCodeGenerator {
     private applyCall(callee: string, args: string[]): string {
         if (args.length === 0) return `${callee}()`;
         return args.reduce((fn, arg) => `${fn}(${arg})`, callee);
+    }
+
+    /** Top-level names are assigned on `env`. A group is a record, and its short names stay inside it. */
+    private generateParameters(entries: Array<ParameterEntry>): string {
+        let js = "";
+        for (const entry of entries) {
+            if (entry.type === "ParameterField") {
+                js += this.indent(`${this.scopeName}.${entry.name.name} = ${this.generateExpression(entry.value)};\n`);
+            } else {
+                js += this.indent(`${this.scopeName}.${entry.name.name} = ${this.generateGroup(entry.entries)};\n`);
+            }
+        }
+        return js;
+    }
+
+    private generateGroup(entries: Array<ParameterEntry>): string {
+        let js = `(() => {\n`;
+        this.indentLevel++;
+        const fields: string[] = [];
+        for (const entry of entries) {
+            const emitted = `__parameterValue${this.parameterValueId++}`;
+            const value = entry.type === "ParameterField"
+                ? this.generateExpression(entry.value)
+                : this.generateGroup(entry.entries);
+            js += this.indent(`const ${emitted} = ${value};\n`);
+            this.aliases.push({ name: entry.name.name, emitted });
+            fields.push(`${JSON.stringify(entry.name.name)}: ${emitted}`);
+        }
+        js += this.indent(`return { tag: "Record", fields: { ${fields.join(", ")} } };\n`);
+        for (let index = 0; index < fields.length; index++) this.aliases.pop();
+        this.indentLevel--;
+        js += this.indent(`})()`);
+        return js;
     }
 
     private indent(text: string): string {

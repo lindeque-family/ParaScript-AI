@@ -28,16 +28,20 @@ import type {
     SmoothOperator,
     NamedArgument,
     ArrayMatchStatement,
-    LambdaExpression
+    LambdaExpression,
+    ParameterEntry,
+    TypeNode
 } from "./ast.js";
 import { unify } from "./unify.js";
 import type { Type } from "./types.js";
-import { createFreshVariable, prune, tComponent, tConstraintSet, tCurve1D, tFloat, tMeet, tSeatedSolid3D, tSolid3D, tString, tSurface2D, tVector, TypeEnvironment, TypeSchema } from "./types.js";
+import { createFreshVariable, prune, tBool, tConstraintSet, tCurve1D, tFloat, tMeet, tSeatedSolid3D, tSolid3D, tString, tSurface2D, tVector, TypeEnvironment, TypeSchema } from "./types.js";
 
 
 
 export class TypeInferenceEngine {
     private sawExport = false;
+    /** Top-level `parameters` groups. `$plate` reads this map, not the script environment. */
+    private readonly parameters = new Map<string, TypeSchema>();
 
     /**
      * Entry hook validating a full parsed Program AST structure.
@@ -45,7 +49,9 @@ export class TypeInferenceEngine {
      */
     public inferProgram(program: Program): TypeEnvironment {
         this.sawExport = false;
+        this.parameters.clear();
         const globalEnv = this.createStandardLibraryEnvironment();
+        if (program.parameters) this.inferParameters(program.parameters.entries, globalEnv);
 
         for (const statement of program.body) {
             this.inferStatement(statement, globalEnv);
@@ -59,20 +65,64 @@ export class TypeInferenceEngine {
     }
 
     /**
+     * Stores each top-level parameter for `$name`. Nested names stay inside their group.
+     * Inside a group, an earlier field is a short name. It does not escape the group.
+     */
+    private inferParameters(entries: Array<ParameterEntry>, scriptEnv: TypeEnvironment): void {
+        const seen = new Set<string>();
+        for (const entry of entries) {
+            const name = entry.name.name;
+            if (seen.has(name)) {
+                throw new Error(`Type Inference Error: '${name}' is already a parameter in this group.`);
+            }
+            seen.add(name);
+            const fieldType = entry.type === "ParameterGroup"
+                ? this.parameterRecord(entry.entries, new TypeEnvironment(scriptEnv))
+                : prune(this.inferExpression(entry.value, new TypeEnvironment(scriptEnv)));
+            this.parameters.set(name, new TypeSchema([], fieldType));
+        }
+    }
+
+    private parameterRecord(entries: Array<ParameterEntry>, parent: TypeEnvironment): { tag: "Record"; fields: Array<{ name: string; fieldType: Type }> } {
+        const local = new TypeEnvironment(parent);
+        const seen = new Set<string>();
+        const fields: Array<{ name: string; fieldType: Type }> = [];
+        for (const entry of entries) {
+            const name = entry.name.name;
+            if (seen.has(name)) {
+                throw new Error(`Type Inference Error: '${name}' is already a parameter in this group.`);
+            }
+            seen.add(name);
+            const fieldType: Type = entry.type === "ParameterGroup"
+                ? this.parameterRecord(entry.entries, local)
+                : prune(this.inferExpression(entry.value, local));
+            local.extend(name, new TypeSchema([], fieldType));
+            fields.push({ name, fieldType });
+        }
+        return { tag: "Record", fields };
+    }
+
+    /**
      * Infers structural scope boundaries across statements and declarations.
      */
     private inferStatement(node: ASTNode, env: TypeEnvironment): void {
         switch (node.type) {
             case "ParamDeclaration":
             case "VariableDeclaration": {
+                // The name is visible while its body is checked, so a def may call itself.
+                const recursive = createFreshVariable();
+                env.extend(node.name.name, new TypeSchema([], recursive));
                 const inferredType = this.inferExpression(node.value as ExpressionNode, env);
-                const schema = this.generalize(inferredType, env);
+                unify(recursive, inferredType);
+                if (node.signature) this.unifyWithSignature(node.name.name, inferredType, node.signature);
+                const schema = this.generalize(prune(inferredType), env);
                 env.extend(node.name.name, schema);
                 break;
             }
             case "ExportStatement": {
                 const exported = this.inferExpression(node.value, env);
-                unify(exported, tComponent);
+                // Open, with no anchors required, so a component that publishes anchors is accepted.
+                unify(exported, { tag: "Component", anchors: [], open: true });
                 this.sawExport = true;
                 break;
             }
@@ -90,15 +140,37 @@ export class TypeInferenceEngine {
             case "Identifier": {
                 return this.instantiate(env.lookup(node.name));
             }
+            case "ParameterReference": {
+                const schema = this.parameters.get(node.name);
+                if (!schema) {
+                    throw new Error(`Type Inference Error: '$${node.name}' is not a parameter.`);
+                }
+                return this.instantiate(schema);
+            }
             case "MemberExpression": {
                 const objectType = prune(this.inferExpression(node.object, env));
-                const anchors = objectType.tag === "Component" ? objectType.anchors : [];
-                if (!anchors.includes(node.property)) {
-                    throw new Error(`Type Inference Error: ${node.property} is not an anchor on this component.`);
+                if (objectType.tag === "Record") {
+                    const field = objectType.fields.find((item) => item.name === node.property);
+                    if (!field) {
+                        throw new Error(`Type Inference Error: ${node.property} is not a field of this parameter.`);
+                    }
+                    return field.fieldType;
                 }
-                return tVector;
+                if (objectType.tag === "Variable") {
+                    unify(objectType, { tag: "Component", anchors: [node.property], open: true });
+                    return tVector;
+                }
+                if (objectType.tag === "Component") {
+                    if (objectType.anchors.includes(node.property)) return tVector;
+                    if (objectType.open) {
+                        objectType.anchors.push(node.property);
+                        return tVector;
+                    }
+                }
+                throw new Error(`Type Inference Error: ${node.property} is not an anchor on this component.`);
             }
             case "FloatLiteral": return tFloat;
+            case "BooleanLiteral": return tBool;
             case "StringLiteral": return tString;
 
             case "VectorLiteral": {
@@ -169,24 +241,12 @@ export class TypeInferenceEngine {
 
             case "PipeExpression": {
                 const leftType = this.inferExpression(node.leftHandSide, env);
-                const functionType = this.inferExpression(node.rightHandSide, env);
-                const freshReturnVar = createFreshVariable();
-
-                // Intercepts left-to-right pipe chains and matches target functions.
-                // The right-hand side function's *final* parameter name configuration is verified 
-                // dynamically by analyzing the targeted CallExpression AST properties downstream.
-                const rhsCall = node.rightHandSide;
-                const inferredParamName = rhsCall.arguments.length > 0
-                    ? rhsCall.callee.name + "_pipe_in"
-                    : "target";
-
-                unify(functionType, {
-                    tag: "Function",
-                    paramName: inferredParamName,
-                    parameter: leftType,
-                    returnType: freshReturnVar
-                });
-                return freshReturnVar;
+                const rightType = prune(this.inferExpression(node.rightHandSide, env));
+                if (rightType.tag !== "Function") {
+                    throw new Error("Type Inference Error: |> pipes a value into a function.");
+                }
+                unify(leftType, rightType.parameter);
+                return rightType.returnType;
             }
 
             case "CallExpression": {
@@ -355,6 +415,50 @@ export class TypeInferenceEngine {
     // ============================================================================
     // SCHEMATIC LET-POLYMORPHISM METHOD IMPLEMENTATIONS
     // ============================================================================
+    /** A written signature. A repeated name is one type variable. An omitted parameter name stays the value's name. */
+    private unifyWithSignature(name: string, inferred: Type, signature: TypeNode): void {
+        const variables = new Map<string, Type>();
+        try {
+            unify(inferred, this.typeFromSignature(signature, variables));
+        } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            throw new Error(`Type Inference Error: '${name}' does not match its signature. ${detail}`);
+        }
+    }
+
+    private typeFromSignature(node: TypeNode, variables: Map<string, Type>): Type {
+        if (node.type === "NamedParameter") {
+            throw new Error("Type Inference Error: a signature parameter needs '=>'.");
+        }
+        if (node.type === "ListType") {
+            return { tag: "Array", elementType: this.typeFromSignature(node.element, variables) };
+        }
+        if (node.type === "FunctionType") {
+            return {
+                tag: "Function",
+                paramName: node.paramName ?? "",
+                parameter: this.typeFromSignature(node.parameter, variables),
+                returnType: this.typeFromSignature(node.returnType, variables)
+            };
+        }
+        switch (node.name) {
+            case "number": return tFloat;
+            case "vector": return tVector;
+            case "boolean": return tBool;
+            case "string": return tString;
+            case "solid": return tSolid3D;
+            case "surface": return tSurface2D;
+            case "component": return { tag: "Component", anchors: [], open: true };
+            default: {
+                const existing = variables.get(node.name);
+                if (existing) return existing;
+                const fresh = createFreshVariable();
+                variables.set(node.name, fresh);
+                return fresh;
+            }
+        }
+    }
+
     private generalize(t: Type, env: TypeEnvironment): TypeSchema {
         const freeInEnv = this.getFreeVariablesInEnv(env);
         const freeInType = this.getFreeVariables(t);
@@ -366,26 +470,50 @@ export class TypeInferenceEngine {
         for (const id of schema.boundVariables) {
             mapping.set(id, createFreshVariable());
         }
-        return this.cloneWithTypeSubstitutions(schema.type, mapping);
+        // A parameter binding is the variable itself. Keep that object so each anchor read
+        // updates one set. A use of a finished function copies the set instead.
+        const copyOpen = schema.type.tag !== "Variable";
+        return this.cloneWithTypeSubstitutions(schema.type, mapping, copyOpen);
     }
-    private cloneWithTypeSubstitutions(t: Type, map: Map<number, Type>): Type {
-        const pruned = prune(t);
-        if (pruned.tag === "Variable") {
-            return map.get(pruned.id) || pruned;
+    private cloneWithTypeSubstitutions(t: Type, map: Map<number, Type>, copyOpen: boolean): Type {
+        if (t.tag === "Variable") {
+            const replacement = map.get(t.id);
+            if (replacement) return this.cloneWithTypeSubstitutions(replacement, map, copyOpen);
+            const resolved = prune(t);
+            if (resolved.tag === "Variable") {
+                const rebound = map.get(resolved.id);
+                if (rebound) return this.cloneWithTypeSubstitutions(rebound, map, copyOpen);
+                return resolved;
+            }
+            if (!copyOpen) return resolved;
+            return this.cloneWithTypeSubstitutions(resolved, map, copyOpen);
         }
+        const pruned = prune(t);
         if (pruned.tag === "Function") {
             return {
                 tag: "Function",
                 paramName: pruned.paramName,
-                parameter: this.cloneWithTypeSubstitutions(pruned.parameter, map),
-                returnType: this.cloneWithTypeSubstitutions(pruned.returnType, map)
+                parameter: this.cloneWithTypeSubstitutions(pruned.parameter, map, copyOpen),
+                returnType: this.cloneWithTypeSubstitutions(pruned.returnType, map, copyOpen)
             };
         }
         if (pruned.tag === "Array") {
             return {
                 tag: "Array",
-                elementType: this.cloneWithTypeSubstitutions(pruned.elementType, map)
+                elementType: this.cloneWithTypeSubstitutions(pruned.elementType, map, copyOpen)
             };
+        }
+        if (pruned.tag === "Record") {
+            return {
+                tag: "Record",
+                fields: pruned.fields.map((field) => ({
+                    name: field.name,
+                    fieldType: this.cloneWithTypeSubstitutions(field.fieldType, map, copyOpen)
+                }))
+            };
+        }
+        if (pruned.tag === "Component" && pruned.open && copyOpen) {
+            return { tag: "Component", anchors: [...pruned.anchors], open: true };
         }
         return pruned;
     }
@@ -398,6 +526,8 @@ export class TypeInferenceEngine {
             this.getFreeVariables(pruned.returnType, set);
         } else if (pruned.tag === "Array") {
             this.getFreeVariables(pruned.elementType, set);
+        } else if (pruned.tag === "Record") {
+            for (const field of pruned.fields) this.getFreeVariables(field.fieldType, set);
         }
         return set;
     }
@@ -437,8 +567,13 @@ export class TypeInferenceEngine {
     }
 
     private expectJoinMember(value: Type, role: string): void {
-        const tag = prune(value).tag;
-        if (tag === "Component") return;
+        const pruned = prune(value);
+        if (pruned.tag === "Component") return;
+        // A function may join a component it receives. Anchors it later reads are checked at the call.
+        if (pruned.tag === "Variable") {
+            unify(pruned, { tag: "Component", anchors: [], open: true });
+            return;
+        }
         throw new Error(`Type Inference Error: join ${role} must be a component.`);
     }
     /**
@@ -477,6 +612,31 @@ export class TypeInferenceEngine {
         // sin(rad: Float) -> Float
         env.extend("sin", new TypeSchema([], {
             tag: "Function", paramName: "rad", parameter: tFloat, returnType: tFloat
+        }));
+
+        // map(f: item => result, list: items) -> results. The parameter name is item.
+        const mapItem = createFreshVariable();
+        const mapResult = createFreshVariable();
+        env.extend("map", new TypeSchema([mapItem.id, mapResult.id], {
+            tag: "Function", paramName: "f", parameter: {
+                tag: "Function", paramName: "item", parameter: mapItem, returnType: mapResult
+            }, returnType: {
+                tag: "Function", paramName: "list", parameter: { tag: "Array", elementType: mapItem }, returnType: {
+                    tag: "Array", elementType: mapResult
+                }
+            }
+        }));
+
+        // filter(predicate: item => true or false, list: items) -> kept items.
+        const filterItem = createFreshVariable();
+        env.extend("filter", new TypeSchema([filterItem.id], {
+            tag: "Function", paramName: "predicate", parameter: {
+                tag: "Function", paramName: "item", parameter: filterItem, returnType: tBool
+            }, returnType: {
+                tag: "Function", paramName: "list", parameter: { tag: "Array", elementType: filterItem }, returnType: {
+                    tag: "Array", elementType: filterItem
+                }
+            }
         }));
 
         return env;
