@@ -8,8 +8,10 @@ export type Type =
     | ComponentType
     | SeatedSolid3DType
     | ArrayType
+    | TupleType
     | FunctionType
-    | RecordType;
+    | RecordType
+    | ExposeType;
 
 export interface TypeVariable {
     readonly tag: "Variable";
@@ -18,7 +20,13 @@ export interface TypeVariable {
 }
 
 export interface PrimitiveType {
-    readonly tag: "Float" | "String" | "Boolean" | "Vector" | "Curve1D" | "Surface2D" | "Solid3D" | "Meet" | "ConstraintSet";
+    readonly tag: "Float" | "String" | "Boolean" | "Vector" | "CoordinateSystem" | "Curve1D" | "Surface2D" | "Solid3D" | "Meet" | "ConstraintSet";
+}
+
+/** The anchor block returned by `expose: coords => { ... }`. */
+export interface ExposeType {
+    readonly tag: "Expose";
+    anchors: string[];
 }
 
 /**
@@ -30,6 +38,8 @@ export interface ComponentType {
     readonly tag: "Component";
     anchors: string[];
     readonly open?: boolean;
+    /** The definition or let that built this component, when it has one. */
+    name?: string;
 }
 
 /** The two solids inside `combine`. `+` and `-` are defined only for this type. */
@@ -40,6 +50,12 @@ export interface SeatedSolid3DType {
 export interface ArrayType {
     readonly tag: "Array";
     readonly elementType: Type;
+}
+
+/** `(a, b)` keeps each value's own type. The length is part of the type. */
+export interface TupleType {
+    readonly tag: "Tuple";
+    readonly elements: Array<Type>;
 }
 
 export interface FunctionType {
@@ -87,6 +103,7 @@ export const tFloat: PrimitiveType = { tag: "Float" };
 export const tString: PrimitiveType = { tag: "String" };
 export const tBool: PrimitiveType = { tag: "Boolean" };
 export const tVector: PrimitiveType = { tag: "Vector" };
+export const tCoordinateSystem: PrimitiveType = { tag: "CoordinateSystem" };
 export const tComponent: ComponentType = { tag: "Component", anchors: [] };
 export const tCurve1D: PrimitiveType = { tag: "Curve1D" };
 export const tSurface2D: PrimitiveType = { tag: "Surface2D" };

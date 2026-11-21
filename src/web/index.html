@@ -65,16 +65,16 @@ def height = 40.0
 def half = 20.0
 
 def Pyramid = Component(
-    solid: Solid3D(faces: [
+    solid: coords => Solid3D(faces: [
     Surface2D(
         max_u: size,
         min_v: u => 0.0, max_v: u => size,
-        formula: u => v => Vector(x: u - half, y: v - half, z: 0.0)
+        formula: u => v => Vector(coords: coords, x: u - half, y: v - half, z: 0.0)
     ),
     Surface2D(
         max_u: size,
         min_v: u => 0.0, max_v: u => 1.0,
-        formula: u => v => Vector(
+        formula: u => v => Vector(coords: coords, 
             x: (u - half) * (1.0 - v),
             y: half * (1.0 - v),
             z: height * v
@@ -83,7 +83,7 @@ def Pyramid = Component(
     Surface2D(
         max_u: size,
         min_v: u => 0.0, max_v: u => 1.0,
-        formula: u => v => Vector(
+        formula: u => v => Vector(coords: coords, 
             x: (u - half) * (1.0 - v),
             y: 0.0 - half * (1.0 - v),
             z: height * v
@@ -92,7 +92,7 @@ def Pyramid = Component(
     Surface2D(
         max_u: size,
         min_v: u => 0.0, max_v: u => 1.0,
-        formula: u => v => Vector(
+        formula: u => v => Vector(coords: coords, 
             x: half * (1.0 - v),
             y: (u - half) * (1.0 - v),
             z: height * v
@@ -101,14 +101,14 @@ def Pyramid = Component(
     Surface2D(
         max_u: size,
         min_v: u => 0.0, max_v: u => 1.0,
-        formula: u => v => Vector(
+        formula: u => v => Vector(coords: coords, 
             x: 0.0 - half * (1.0 - v),
             y: (u - half) * (1.0 - v),
             z: height * v
         )
     )
     ]),
-    expose: {}
+    expose: coords => {}
 )
 export(Pyramid)</textarea>
         </div>

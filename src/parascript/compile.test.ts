@@ -6,10 +6,10 @@ test("compilation reports which axis is up", () => {
     const source = (up: string) => `
         setup { units: "mm", coordinate_system: "${up}" }
         def Mark = Component(
-            solid: Solid3D(faces: [
-                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(x: u, y: v, z: 0.0))
+            solid: coords => Solid3D(faces: [
+                Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0))
             ]),
-            expose: {}
+            expose: coords => {}
         )
         export(Mark)
     `;

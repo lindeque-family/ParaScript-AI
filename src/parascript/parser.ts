@@ -5,6 +5,7 @@
 export type TokenType =
 
     | "SETUP" | "PARAMETERS" | "PARAM" | "DEF" | "FN" | "EXPORT" | "RETURN" | "TRUE" | "FALSE"
+    | "LET" | "IN"
     | "PARAMETER"
     | "MATCH" | "IDENTIFIER" | "FLOAT" | "STRING"
     | "EQUALS" | "PIPE" | "PIPE_FORWARD" | "ARROW" | "COLON" | "CONS" | "COMMA" | "DOT"
@@ -21,6 +22,7 @@ export interface Token {
 
 import type {
     ASTNode,
+    BaseNode,
     Program,
     SetupBlock,
     ParametersBlock,
@@ -37,6 +39,7 @@ import type {
     Curve1DNode,
     JoinDomain,
     LambdaExpression,
+    LetPattern,
     Surface2DNode,
     Solid3DNode,
     TypeNode
@@ -175,7 +178,7 @@ export class Lexer {
 
                 const keywordMap: Record<string, TokenType> = {
                     setup: "SETUP", parameters: "PARAMETERS", param: "PARAM", def: "DEF", fn: "FN",
-                    export: "EXPORT", return: "RETURN",
+                    export: "EXPORT", return: "RETURN", let: "LET", in: "IN",
                     true: "TRUE", false: "FALSE", match: "MATCH"
                 };
 
@@ -234,6 +237,15 @@ export class Parser {
         }
         const tok = this.peek();
         throw new Error(`Parser Error: ${errorMsg} (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
+    }
+
+    private place<T extends BaseNode>(token: Token, node: T): T {
+        return Object.assign(node, { line: token.line, column: token.char });
+    }
+
+    private placeAt<T extends BaseNode>(source: BaseNode, node: T): T {
+        if (source.line === undefined || source.column === undefined) return node;
+        return Object.assign(node, { line: source.line, column: source.column });
     }
 
     public parse(): Program {
@@ -359,10 +371,27 @@ export class Parser {
     }
 
     private parseTypeAtom(): TypeNode {
-        if (this.match("LPAREN")) {
-            const inner = this.parseFunctionType();
+        if (this.peek().type === "LPAREN") {
+            const open = this.advance();
+            if (this.peek().type === "RPAREN") {
+                throw new Error(`Parser Error: A tuple type needs at least two elements. (Found ')' at line ${open.line}, col ${open.char})`);
+            }
+            const first = this.parseFunctionType();
+            if (this.peek().type === "COMMA") {
+                const elements = [this.tupleElementType(first)];
+                while (this.peek().type === "COMMA") {
+                    this.advance();
+                    if (this.peek().type === "RPAREN") break;
+                    elements.push(this.tupleElementType(this.parseFunctionType()));
+                }
+                this.consume("RPAREN", "Expected ')' after the tuple type.");
+                if (elements.length < 2) {
+                    throw new Error(`Parser Error: A tuple type needs at least two elements. (Found ')' at line ${open.line}, col ${open.char})`);
+                }
+                return { type: "TupleType", elements };
+            }
             this.consume("RPAREN", "Expected ')' after the type.");
-            return inner;
+            return first;
         }
         if (this.match("LBRACKET")) {
             const element = this.parseFunctionType();
@@ -376,6 +405,14 @@ export class Parser {
         throw new Error(`Parser Error: Expected a type. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
     }
 
+    /** A name before a colon is a function parameter, not a tuple element. */
+    private tupleElementType(node: TypeNode): TypeNode {
+        if (node.type === "NamedParameter") {
+            throw new Error(`Parser Error: A tuple type is (number, vector). '${node.name}' names a function parameter.`);
+        }
+        return node;
+    }
+
     private parseExportStatement(): ExportStatement {
         this.advance();
         this.consume("LPAREN", "Expected '(' after export.");
@@ -383,21 +420,17 @@ export class Parser {
         this.consume("RPAREN", "Expected ')' after the exported value.");
         return { type: "ExportStatement", value };
     }
-    private parseComponentExpression(): ComponentExpression {
+    private parseComponentExpression(keyword: Token): ComponentExpression {
         this.consume("LPAREN", "Expected '(' after Component.");
         let solid: ExpressionNode | null = null;
-        let expose: ExposeBlock | null = null;
+        let expose: ExpressionNode | null = null;
         while (this.peek().type !== "RPAREN" && this.peek().type !== "EOF") {
             const nameTok = this.consume("IDENTIFIER", "Expected a Component argument name.");
             this.consume("COLON", "Expected named argument designation operator ':'.");
             if (nameTok.value === "solid" && !solid) {
                 solid = this.parseExpression();
             } else if (nameTok.value === "expose" && !expose) {
-                if (this.peek().type !== "LBRACE") {
-                    const tok = this.peek();
-                    throw new Error(`Parser Error: Component expose is a block of anchors. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
-                }
-                expose = this.parseAnchorBlock();
+                expose = this.parseExpression();
             } else {
                 throw new Error(`Parser Error: Component accepts solid and expose. (Found '${nameTok.value}' at line ${nameTok.line}, col ${nameTok.char})`);
             }
@@ -408,10 +441,18 @@ export class Parser {
             const tok = this.peek();
             throw new Error(`Parser Error: Component needs solid and expose. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
         }
-        return { type: "ComponentExpression", solid, expose };
+        return this.place(keyword, { type: "ComponentExpression", solid, expose });
+    }
+    private parseVectorField(name: string, errorMsg: string): ExpressionNode {
+        const key = this.consume("IDENTIFIER", errorMsg);
+        if (key.value !== name) {
+            throw new Error(`Parser Error: ${errorMsg} (Found '${key.value}' at line ${key.line}, col ${key.char})`);
+        }
+        this.consume("COLON", ": separator");
+        return this.parseExpression();
     }
     private parseAnchorBlock(): ExposeBlock {
-        this.consume("LBRACE", "Expected '{' to open the expose block.");
+        const brace = this.consume("LBRACE", "Expected '{' to open the expose block.");
         const properties: Array<ExposeProperty> = [];
         while (this.peek().type !== "RBRACE" && this.peek().type !== "EOF") {
             const name = this.parseIdentifier();
@@ -421,64 +462,104 @@ export class Parser {
             if (this.peek().type === "COMMA") this.advance();
         }
         this.consume("RBRACE", "Expected '}' to close the expose block.");
-        return { type: "ExposeBlock", properties };
+        return this.place(brace, { type: "ExposeBlock", properties });
     }
     private parseExpression(): ExpressionNode {
+        if (this.peek().type === "LET") return this.parseLetExpression();
         return this.parseForwardExpression();
+    }
+    /** `let name = value in body`, or `let (x, y) = value in body`. */
+    private parseLetExpression(): ExpressionNode {
+        const keyword = this.consume("LET", "Expected 'let'.");
+        if (this.peek().type === "LPAREN") {
+            const pattern = this.parseLetPattern();
+            this.consume("EQUALS", "Expected '=' after the let pattern.");
+            const value = this.parseExpression();
+            this.consume("IN", "Expected 'in' after the let binding.");
+            const body = this.parseExpression();
+            return this.place(keyword, { type: "TupleLetExpression", pattern, value, body });
+        }
+        const name = this.parseIdentifier();
+        this.consume("EQUALS", "Expected '=' after the let name.");
+        const value = this.parseExpression();
+        this.consume("IN", "Expected 'in' after the let binding.");
+        const body = this.parseExpression();
+        return this.place(keyword, { type: "LetExpression", name, value, body });
+    }
+
+    /** `(x, y)` or `(x, (y, z))`. One name in parentheses is not a tuple. */
+    private parseLetPattern(): LetPattern {
+        const open = this.consume("LPAREN", "Expected '(' to open a tuple pattern.");
+        const elements: Array<LetPattern> = [];
+        while (this.peek().type !== "RPAREN" && this.peek().type !== "EOF") {
+            if (this.peek().type === "LPAREN") elements.push(this.parseLetPattern());
+            else elements.push({ type: "Name", name: this.parseIdentifier() });
+            if (this.peek().type === "COMMA") this.advance();
+            else break;
+        }
+        this.consume("RPAREN", "Expected ')' after the tuple pattern.");
+        if (elements.length < 2) {
+            throw new Error(`Parser Error: A tuple needs at least two elements. (Found ')' at line ${open.line}, col ${open.char})`);
+        }
+        return { type: "Tuple", elements, line: open.line, column: open.char };
     }
     // `|>` sends a value into a function. `>>` binds tighter, so `x |> f >> g` pipes into the composition.
     private parseForwardExpression(): ExpressionNode {
         let expr = this.parsePipeExpression();
-        while (this.match("PIPE_FORWARD")) {
+        while (this.peek().type === "PIPE_FORWARD") {
+            const operator = this.advance();
             const right = this.parsePipeExpression();
-            expr = { type: "PipeExpression", leftHandSide: expr, rightHandSide: right };
+            expr = this.place(operator, { type: "PipeExpression", leftHandSide: expr, rightHandSide: right });
         }
         return expr;
     }
     private parsePipeExpression(): ExpressionNode {
         let expr = this.parseConsExpression();
-        while (this.match("PIPE")) {
+        while (this.peek().type === "PIPE") {
+            const operator = this.advance();
             const right = this.parseConsExpression();
-            expr = { type: "ComposeExpression", left: expr, right };
+            expr = this.place(operator, { type: "ComposeExpression", left: expr, right });
         }
         return expr;
     }
     private parseConsExpression(): ExpressionNode {
         let expr = this.parseAdditive();
-        while (this.match("CONS")) {
+        while (this.peek().type === "CONS") {
+            const operator = this.advance();
             const right = this.parseConsExpression();
-            expr = {
+            expr = this.place(operator, {
                 type: "BinaryExpression",
                 operator: "::",
                 left: expr,
                 right
-            };
+            });
         }
         return expr;
     }
     private parseAdditive(): ExpressionNode {
         let expr = this.parseMultiplicative();
         while (this.peek().type === "PLUS" || this.peek().type === "MINUS") {
-            const op = this.advance().value as SmoothOperator;
+            const operator = this.advance();
             const right = this.parseMultiplicative();
-            expr = { type: "BinaryExpression", operator: op, left: expr, right };
+            expr = this.place(operator, { type: "BinaryExpression", operator: operator.value as SmoothOperator, left: expr, right });
         }
         return expr;
     }
     private parseMultiplicative(): ExpressionNode {
         let expr = this.parseExponential();
         while (this.peek().type === "STAR" || this.peek().type === "SLASH") {
-            const op = this.advance().value as SmoothOperator;
+            const operator = this.advance();
             const right = this.parseExponential();
-            expr = { type: "BinaryExpression", operator: op, left: expr, right };
+            expr = this.place(operator, { type: "BinaryExpression", operator: operator.value as SmoothOperator, left: expr, right });
         }
         return expr;
     }
     private parseExponential(): ExpressionNode {
         let expr = this.parsePrimary();
-        while (this.match("CARET")) {
+        while (this.peek().type === "CARET") {
+            const operator = this.advance();
             const right = this.parsePrimary();
-            expr = { type: "BinaryExpression", operator: "^", left: expr, right };
+            expr = this.place(operator, { type: "BinaryExpression", operator: "^", left: expr, right });
         }
         return expr;
     }
@@ -487,9 +568,22 @@ export class Parser {
     }
 
     private parsePostfix(expr: ExpressionNode): ExpressionNode {
-        while (this.match("DOT")) {
-            const property = this.consume("IDENTIFIER", "Expected an anchor name.").value;
-            expr = { type: "MemberExpression", object: expr, property };
+        while (this.peek().type === "DOT") {
+            this.advance();
+            const property = this.consume("IDENTIFIER", "Expected an anchor name.");
+            if (this.peek().type === "LPAREN") {
+                this.advance();
+                const args = this.parseCallArguments();
+                this.consume("RPAREN", "Expected closing parenthesis for a vector method.");
+                expr = this.place(property, {
+                    type: "MethodCallExpression",
+                    object: expr,
+                    method: this.place(property, { type: "Identifier", name: property.value }),
+                    arguments: args
+                });
+            } else {
+                expr = this.place(property, { type: "MemberExpression", object: expr, property: property.value });
+            }
         }
         return expr;
     }
@@ -498,48 +592,44 @@ export class Parser {
         const tok = this.peek();
         if (tok.type === "PARAMETER") {
             this.advance();
-            return { type: "ParameterReference", name: tok.value };
+            return this.place(tok, { type: "ParameterReference", name: tok.value });
         }
         if (tok.type === "MATCH") {
             return this.parseArrayMatchExpression();
         }
         if (tok.type === "IDENTIFIER") {
             if (tok.value === "Component") {
-                this.advance();
-                if (this.peek().type === "LPAREN") return this.parseComponentExpression();
-                const id: Identifier = { type: "Identifier", name: "Component" };
+                const keyword = this.advance();
+                if (this.peek().type === "LPAREN") return this.parseComponentExpression(keyword);
+                const id = this.place(keyword, { type: "Identifier" as const, name: "Component" });
                 if (this.peek().type === "ARROW") {
                     this.advance();
-                    return { type: "LambdaExpression", parameter: id, body: this.parseExpression() };
+                    return this.placeAt(id, { type: "LambdaExpression", parameter: id, body: this.parseExpression() });
                 }
                 return id;
             }
             if (tok.value === "join") {
-                this.advance();
-                if (this.peek().type === "LPAREN") return this.parseJoinDomain();
-                const id: Identifier = { type: "Identifier", name: "join" };
+                const keyword = this.advance();
+                if (this.peek().type === "LPAREN") return this.parseJoinDomain(keyword);
+                const id = this.place(keyword, { type: "Identifier" as const, name: "join" });
                 if (this.peek().type === "ARROW") {
                     this.advance();
-                    return { type: "LambdaExpression", parameter: id, body: this.parseExpression() };
+                    return this.placeAt(id, { type: "LambdaExpression", parameter: id, body: this.parseExpression() });
                 }
                 return id;
             }
             if (tok.value === "Vector") {
-                this.advance();
+                const keyword = this.advance();
                 this.consume("LPAREN", "Vector coordinates must wrap inner values inside parenthesis.");
-                this.consume("IDENTIFIER", "Expected axis label key 'x'."); this.consume("COLON", ": separator");
-                const x = this.parseExpression(); this.consume("COMMA", ", step separator");
-                this.consume("IDENTIFIER", "Expected axis label key 'y'."); this.consume("COLON", ": separator");
-                const y = this.parseExpression(); this.consume("COMMA", ", step separator");
-                this.consume("IDENTIFIER", "Expected axis label key 'z'."); this.consume("COLON", ": separator");
-                const z = this.parseExpression();
+                const coords = this.parseVectorField("coords", "Vector needs a coordinate system first.");
+                this.consume("COMMA", ", step separator");
+                const x = this.parseVectorField("x", "Expected axis label key 'x'.");
+                this.consume("COMMA", ", step separator");
+                const y = this.parseVectorField("y", "Expected axis label key 'y'.");
+                this.consume("COMMA", ", step separator");
+                const z = this.parseVectorField("z", "Expected axis label key 'z'.");
                 this.consume("RPAREN", "Expected closing tuple parenthesis.");
-                return { 
-                    type: "VectorLiteral", 
-                    x,
-                    y,
-                    z
-                };
+                return this.place(keyword, { type: "VectorLiteral", coords, x, y, z });
             }
             if (tok.value === "Curve1D") { this.advance(); return this.parseCurve1DNode(); }
             if (tok.value === "Surface2D") { this.advance(); return this.parseSurface2DNode(); }
@@ -548,27 +638,30 @@ export class Parser {
             if (this.peek().type === "ARROW") {
                 this.advance();
                 const body = this.parseExpression();
-                return { type: "LambdaExpression", parameter: id, body };
+                return this.placeAt(id, { type: "LambdaExpression", parameter: id, body });
             }
             if (this.peek().type === "LPAREN") {
                 this.advance();
                 const args = this.parseCallArguments();
                 this.consume("RPAREN", "Expected closing parenthesis for function execution.");
-                return { type: "CallExpression", callee: id, arguments: args };
+                return this.placeAt(id, { type: "CallExpression", callee: id, arguments: args });
             }
             return id;
         }
         if (tok.type === "TRUE" || tok.type === "FALSE") {
             this.advance();
-            return { type: "BooleanLiteral", value: tok.type === "TRUE" };
+            return this.place(tok, { type: "BooleanLiteral", value: tok.type === "TRUE" });
         }
         if (tok.type === "FLOAT") {
             this.advance();
-            return { type: "FloatLiteral", value: parseFloat(tok.value) };
+            return this.place(tok, { type: "FloatLiteral", value: parseFloat(tok.value) });
         }
         if (tok.type === "STRING") {
             this.advance();
-            return { type: "StringLiteral", value: tok.value };
+            return this.place(tok, { type: "StringLiteral", value: tok.value });
+        }
+        if (tok.type === "LBRACE") {
+            return this.parseAnchorBlock();
         }
         if (tok.type === "LBRACKET") {
             this.advance();
@@ -578,32 +671,53 @@ export class Parser {
                 if (this.peek().type === "COMMA") this.advance();
             }
             this.consume("RBRACKET", "Expected closing bracket ']' for array literal.");
-            return { type: "ArrayLiteral", elements };
+            return this.place(tok, { type: "ArrayLiteral", elements });
         }
         if (tok.type === "LPAREN") {
             this.advance();
-            const expr = this.parseExpression();
-            this.consume("RPAREN", "Mismatched expression parenthesis grouping closure.");
-            return expr;
+            if (this.peek().type === "RPAREN") {
+                throw new Error(`Parser Error: A tuple needs at least two elements. (Found ')' at line ${tok.line}, col ${tok.char})`);
+            }
+            const first = this.parseExpression();
+            if (this.peek().type !== "COMMA") {
+                this.consume("RPAREN", "Mismatched expression parenthesis grouping closure.");
+                return first;
+            }
+            const elements = [first];
+            while (this.peek().type === "COMMA") {
+                this.advance();
+                if (this.peek().type === "RPAREN") break;
+                elements.push(this.parseExpression());
+            }
+            this.consume("RPAREN", "Expected ')' after the tuple.");
+            if (elements.length < 2) {
+                throw new Error(`Parser Error: A tuple needs at least two elements. (Found ')' at line ${tok.line}, col ${tok.char})`);
+            }
+            return this.place(tok, { type: "TupleLiteral", elements });
         }
         throw new Error(`Parser Error: Encountered unexpected token element entry '${tok.value}' during active execution parsing loop at line ${tok.line}`);
     }
-    private parseJoinDomain(): JoinDomain {
+    private parseJoinDomain(keyword: Token): JoinDomain {
         this.consume("LPAREN", "Expected '(' after join.");
         let frame: ExpressionNode | null = null;
         let placed: ExpressionNode | null = null;
         let using: ExpressionNode | null = null;
         let combine: ExpressionNode | null = null;
+        let coords: ExpressionNode | null = null;
         while (this.peek().type !== "RPAREN" && this.peek().type !== "EOF") {
             const nameTok = this.consume("IDENTIFIER", "Expected a join argument name.");
             this.consume("COLON", "Expected named argument designation operator ':'.");
             const value = this.parseExpression();
+            if (coords) {
+                throw new Error(`Parser Error: join takes the coordinate system last. (Found '${nameTok.value}' at line ${nameTok.line}, col ${nameTok.char})`);
+            }
             if (nameTok.value === "frame" && !frame) frame = value;
             else if (nameTok.value === "placed" && !placed) placed = value;
             else if (nameTok.value === "using" && !using) using = value;
             else if (nameTok.value === "combine" && !combine) combine = value;
+            else if (nameTok.value === "coords" && !coords) coords = value;
             else {
-                throw new Error(`Parser Error: join accepts frame, placed, using, and combine. (Found '${nameTok.value}' at line ${nameTok.line}, col ${nameTok.char})`);
+                throw new Error(`Parser Error: join accepts frame, placed, using, combine, and coords. (Found '${nameTok.value}' at line ${nameTok.line}, col ${nameTok.char})`);
             }
             if (this.peek().type === "COMMA") this.advance();
         }
@@ -612,7 +726,8 @@ export class Parser {
             const tok = this.peek();
             throw new Error(`Parser Error: join needs frame, placed, using, and combine. (Found '${tok.value}' at line ${tok.line}, col ${tok.char})`);
         }
-        return { type: "JoinDomain", frame, placed, using, combine };
+        const join: JoinDomain = { type: "JoinDomain", frame, placed, using, combine };
+        return this.place(keyword, coords ? { ...join, coords } : join);
     }
     private parseArrayMatchExpression(): ArrayMatchStatement {
         this.consume("MATCH", "Expected 'match' keyword initiation sequence.");
@@ -695,11 +810,11 @@ export class Parser {
             const name = this.parseIdentifier();
             if (this.match("ARROW")) {
                 const body = this.parseExpression();
-                args.push({
+                args.push(this.placeAt(name, {
                     type: "NamedArgument",
                     name,
-                    value: { type: "LambdaExpression", parameter: name, body }
-                });
+                    value: this.placeAt(name, { type: "LambdaExpression", parameter: name, body })
+                }));
             } else {
                 this.consume("COLON", "Expected named argument designation operator ':'.");
                 const value = this.parseExpression();
@@ -711,6 +826,6 @@ export class Parser {
     }
     private parseIdentifier(): Identifier {
         const tok = this.consume("IDENTIFIER", "Expected a lowercase snake_case identifier variable label mapping context.");
-        return { type: "Identifier", name: tok.value };
+        return this.place(tok, { type: "Identifier", name: tok.value });
     }
 }

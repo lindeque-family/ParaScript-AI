@@ -143,13 +143,13 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(referenceHtml, /href="\/workspace\?example=broom"/);
         assert.match(referenceHtml, /href="\/workspace\?example=patterned-plate"/);
         assert.match(referenceHtml, /The handle, the ferrule, and the hole through the handle are three calls/);
-        assert.match(referenceHtml, /Tube\(radius: radius, height: height\)/);
+        assert.match(referenceHtml, /Tube\(coords: coords, radius: radius, height: height\)/);
         assert.match(referenceHtml, /Box\(width: size, depth: size, height: thickness\)/);
-        assert.match(referenceHtml, /Disk\(radius: radius, z: 0\.0\)/);
-        assert.match(referenceHtml, /Disk\(radius: radius, z: height\)/);
-        assert.match(referenceHtml, /Cylinder\(radius: handle_r, height: handle_len\)/);
-        assert.match(referenceHtml, /Cylinder\(radius: hang_r, height: hang_span\)/);
-        assert.match(referenceHtml, /Cylinder\(radius: ferrule_r, height: ferrule_h\)/);
+        assert.match(referenceHtml, /Disk\(coords: coords, radius: radius, z: 0\.0\)/);
+        assert.match(referenceHtml, /Disk\(coords: coords, radius: radius, z: height\)/);
+        assert.match(referenceHtml, /Cylinder\(\s*radius: \$handle\.radius,\s*height: \$handle\.length\)/);
+        assert.match(referenceHtml, /Cylinder\(\s*radius: \$hang\.radius,\s*height: \$handle\.radius \* 2\.0 \+ 8\.0\)/);
+        assert.match(referenceHtml, /Cylinder\(\s*radius: \$ferrule\.radius,\s*height: \$ferrule\.height\)/);
         assert.equal(referenceHtml.includes("<script"), false);
 
         const markdown = await fetch(`${base}/language.md`);
@@ -158,6 +158,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         const markdownText = await markdown.text();
         assert.match(markdownText, /shift\(d: 3\.0\) >> scale\(k: 2\.0\)/);
         assert.match(markdownText, /def patterned_plate = cut_holes >> add_pins/);
+        assert.match(markdownText, /let bottom = Disk\(coords: coords, radius: radius, z: 0\.0\) in/);
         assert.match(markdownText, /\[1\.0, 2\.0, 3\.0\] \|> map\(f: item => item \* 2\.0\)/);
         assert.match(markdownText, /`\|>` pipes a value into a function/);
         assert.match(markdownText, /## Guidance for a language model/);

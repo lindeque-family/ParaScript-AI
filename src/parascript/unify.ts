@@ -20,10 +20,28 @@ function occursInType(v: TypeVariable, t: Type): boolean {
     if (pruned.tag === "Array") {
         return occursInType(v, pruned.elementType);
     }
+    if (pruned.tag === "Tuple") {
+        return pruned.elements.some((element) => occursInType(v, element));
+    }
     if (pruned.tag === "Record") {
         return pruned.fields.some((field) => occursInType(v, field.fieldType));
     }
     return false;
+}
+
+export function formatList(items: string[]): string {
+    if (items.length <= 1) return items.join("");
+    if (items.length === 2) return `${items[0]} and ${items[1]}`;
+    return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+/** `'top' is not an anchor on Box. Box exposes up, right, and corner.` */
+export function missingAnchorDetail(anchor: string, componentName: string | undefined, exposed: string[]): string {
+    const who = componentName ?? "this component";
+    const anchors = exposed.length === 0
+        ? `${who} exposes no anchors`
+        : `${who} exposes ${formatList(exposed)}`;
+    return `'${anchor}' is not an anchor on ${who}. ${anchors}.`;
 }
 
 export function unify(t1: Type, t2: Type): void {
@@ -60,6 +78,18 @@ export function unify(t1: Type, t2: Type): void {
         return;
     }
 
+    if (p1.tag === "Tuple" && p2.tag === "Tuple") {
+        if (p1.elements.length !== p2.elements.length) {
+            throw new Error(`Type Inference Error: A tuple of ${p1.elements.length} values does not match a tuple of ${p2.elements.length} values.`);
+        }
+        for (let index = 0; index < p1.elements.length; index++) {
+            const left = p1.elements[index];
+            const right = p2.elements[index];
+            if (left && right) unify(left, right);
+        }
+        return;
+    }
+
     if (p1.tag === "Record" && p2.tag === "Record") {
         if (p1.fields.length !== p2.fields.length || p1.fields.some((field) => !p2.fields.some((other) => other.name === field.name))) {
             throw new Error(`Type Inference Error: Structural Unification Mismatch. Cannot resolve type structure '${p1.tag}' with target contract type '${p2.tag}'.`);
@@ -86,7 +116,7 @@ export function unify(t1: Type, t2: Type): void {
         if (required && actual) {
             const missing = required.anchors.find((name) => !actual.anchors.includes(name));
             if (missing !== undefined) {
-                throw new Error(`Type Inference Error: ${missing} is not an anchor on this component.`);
+                throw new Error(`Type Inference Error: ${missingAnchorDetail(missing, actual.name, actual.anchors)}`);
             }
         }
         return;

@@ -2,13 +2,15 @@
 // PARASCRIPT AI WEB TRANSPILED CODE GENERATOR KERNEL (v14.0.0)
 // ============================================================================
 
-import type { ASTNode, Program, ExpressionNode, Identifier, ParameterEntry } from "./ast.js";
+import type { ASTNode, Program, ExpressionNode, Identifier, LetPattern, ParameterEntry } from "./ast.js";
+import { vectorRuntimeSource } from "./vector-ops.js";
 
 export class WebCodeGenerator {
     private indentLevel = 0;
     private scopeDepth = 0;
     private scopeName = "env";
     private parameterValueId = 0;
+    private tupleTemp = 0;
     private readonly locals: string[] = [];
     /** Parameter fields in the group being generated. The emitted name is a unique const. */
     private readonly aliases: Array<{ name: string; emitted: string }> = [];
@@ -26,6 +28,8 @@ export class WebCodeGenerator {
         js += this.indent(`const sin = Math.sin;\n`);
         js += this.indent(`const exp = Math.exp;\n`);
         js += this.indent(`const env = {};\n`);
+        js += this.indent(`const __psCoordinateSystem = { tag: "CoordinateSystem" };\n`);
+        js += vectorRuntimeSource.split("\n").map((line) => line.length === 0 ? "\n" : this.indent(`${line}\n`)).join("");
         js += this.indent(`const publishedModel = { current: undefined };\n`);
         js += this.indent(`const asSolid = (value) => {\n`);
         js += this.indent(`    let resolved = typeof value === "function" ? value() : value;\n`);
@@ -62,6 +66,13 @@ export class WebCodeGenerator {
         js += this.indent(`        return keep;\n`);
         js += this.indent(`    });\n`);
         js += this.indent(`};\n`);
+        js += this.indent(`env.integers = (start) => (count) => {\n`);
+        js += this.indent(`    if (typeof start !== "number" || !Number.isFinite(start) || !Number.isInteger(start)) throw new Error("integers start is a whole number.");\n`);
+        js += this.indent(`    if (typeof count !== "number" || !Number.isFinite(count) || !Number.isInteger(count) || count < 0) throw new Error("integers count is a whole number, zero or more.");\n`);
+        js += this.indent(`    const values = [];\n`);
+        js += this.indent(`    for (let index = 0; index < count; index++) values.push(start + index);\n`);
+        js += this.indent(`    return values;\n`);
+        js += this.indent(`};\n`);
         js += this.indent(`env.meet = (frame) => (placed) => ({ tag: "Meet", frame, placed });\n`);
         js += this.indent(`env.align = (planar) => (translation) => (rotation) => ({ tag: "ConstraintSet", type: "align", planar, translation, rotation });\n`);
         js += this.indent(`const applyMate = (fn, framePart, placedPart) => {\n`);
@@ -73,7 +84,7 @@ export class WebCodeGenerator {
         js += this.indent(`    if (!mate || mate.tag !== "ConstraintSet") throw new Error("A join places the placed part with a relative mate.");\n`);
         js += this.indent(`    return mate;\n`);
         js += this.indent(`};\n`);
-        js += this.indent(`env.normal = (u) => (v) => (surface) => { /* calculus forward differentiation proxy step */ return { tag: "Vector", x: 0, y: 0, z: 1 }; };\n`);
+        js += this.indent(`env.normal = (u) => (v) => (surface) => { /* calculus forward differentiation proxy step */ return { tag: "Vector", coords: __psCoordinateSystem, x: 0, y: 0, z: 1 }; };\n`);
         // The frame part keeps the join's frame. The mate poses only the placed part.
         js += this.indent(`const placeAgainst = (framePart, placedPart, constraint) => {\n`);
         js += this.indent(`    const resolve = (item) => (typeof item === "function" ? item() : item);\n`);
@@ -129,7 +140,7 @@ export class WebCodeGenerator {
         js += this.indent(`        mapPoint = (p) => {\n`);
         js += this.indent(`            const point = axis(p, "surface point");\n`);
         js += this.indent(`            const turned = apply(orient, { x: point.x - sp.x, y: point.y - sp.y, z: point.z - sp.z });\n`);
-        js += this.indent(`            return { tag: "Vector", x: tp.x + turned.x, y: tp.y + turned.y, z: tp.z + turned.z };\n`);
+        js += this.indent(`            return { tag: "Vector", coords: __psCoordinateSystem, x: tp.x + turned.x, y: tp.y + turned.y, z: tp.z + turned.z };\n`);
         js += this.indent(`        };\n`);
         js += this.indent(`    } else throw new Error("A join places the placed part with a relative mate.");\n`);
         js += this.indent(`    const walk = (item) => {\n`);
@@ -201,14 +212,19 @@ export class WebCodeGenerator {
                 return `"${node.value.replace(/"/g, '\\"')}"`;
             }
             case "VectorLiteral": {
+                const coords = this.generateExpression(node.coords);
                 const x = this.generateExpression(node.x);
                 const y = this.generateExpression(node.y);
                 const z = this.generateExpression(node.z);
-                return `{ tag: "Vector", x: ${x}, y: ${y}, z: ${z} }`;
+                return `{ tag: "Vector", coords: ${coords}, x: ${x}, y: ${y}, z: ${z} }`;
             }
             case "ArrayLiteral": {
                 const elements = node.elements.map(e => this.generateExpression(e)).join(", ");
                 return `[${elements}]`;
+            }
+            case "TupleLiteral": {
+                const elements = node.elements.map(e => this.generateExpression(e)).join(", ");
+                return `{ tag: "Tuple", elements: [${elements}] }`;
             }
             case "BinaryExpression": {
                 if (node.operator === "::") {
@@ -228,7 +244,7 @@ export class WebCodeGenerator {
                             if (!leftSolid || !rightSolid) throw new Error("Addition needs two solids.");
                             return { tag: "Component", op: "add", left: leftSolid, right: rightSolid };
                         }
-                        if (l && r && l.tag === "Vector" && r.tag === "Vector") return { tag: "Vector", x: l.x + r.x, y: l.y + r.y, z: l.z + r.z };
+                        if (l && r && l.tag === "Vector" && r.tag === "Vector") throw new Error("Vector addition is add(vector:).");
                         return l + r;
                     })(${left}, ${right})`;
                 }
@@ -241,7 +257,7 @@ export class WebCodeGenerator {
                             if (!leftSolid || !rightSolid) throw new Error("Subtraction needs two solids.");
                             return { tag: "Component", op: "subtract", left: leftSolid, right: rightSolid };
                         }
-                        if (l && r && l.tag === "Vector" && r.tag === "Vector") return { tag: "Vector", x: l.x - r.x, y: l.y - r.y, z: l.z - r.z };
+                        if (l && r && l.tag === "Vector" && r.tag === "Vector") throw new Error("Vector subtraction is subtract(vector:).");
                         return l - r;
                     })(${left}, ${right})`;
                 }
@@ -258,6 +274,29 @@ export class WebCodeGenerator {
                 this.locals.pop();
                 return `(${node.parameter.name}) => (${body})`;
             }
+            case "LetExpression": {
+                const value = this.generateExpression(node.value);
+                this.locals.push(node.name.name);
+                try {
+                    const body = this.generateExpression(node.body);
+                    return `(() => { const ${node.name.name} = ${value}; return ${body}; })()`;
+                } finally {
+                    this.locals.pop();
+                }
+            }
+            case "TupleLetExpression": {
+                const value = this.generateExpression(node.value);
+                const source = `__psTuple${this.tupleTemp++}`;
+                const names: string[] = [];
+                const prelude = this.destructureTuple(node.pattern, source, names);
+                for (const name of names) this.locals.push(name);
+                try {
+                    const body = this.generateExpression(node.body);
+                    return `(() => { const ${source} = (${value}); ${prelude} return (${body}); })()`;
+                } finally {
+                    for (let index = 0; index < names.length; index++) this.locals.pop();
+                }
+            }
             case "JoinDomain": {
                 const parent = this.scopeName;
                 const frame = this.generateExpression(node.frame);
@@ -268,7 +307,9 @@ export class WebCodeGenerator {
                     // using and combine close over this domain. applyMate runs before the placed part moves.
                     const using = this.generateExpression(node.using);
                     const combine = this.generateExpression(node.combine);
-                    return `(() => {\nconst ${domainName} = Object.create(${parent});\n${domainName}.frame = ${frame};\n${domainName}.placed = ${placed};\n${domainName}.using = applyMate(${using}, ${domainName}.frame, ${domainName}.placed);\n${domainName}.placed = placeAgainst(${domainName}.frame, ${domainName}.placed, ${domainName}.using);\n${domainName}.frame = asSolid(${domainName}.frame);\nreturn (${combine})(${domainName}.frame)(${domainName}.placed);\n})()`;
+                    const body = `(() => {\nconst ${domainName} = Object.create(${parent});\n${domainName}.frame = ${frame};\n${domainName}.placed = ${placed};\n${domainName}.using = applyMate(${using}, ${domainName}.frame, ${domainName}.placed);\n${domainName}.placed = placeAgainst(${domainName}.frame, ${domainName}.placed, ${domainName}.using);\n${domainName}.frame = asSolid(${domainName}.frame);\nreturn (${combine})(${domainName}.frame)(${domainName}.placed);\n})()`;
+                    if (node.coords) return `((${this.generateExpression(node.coords)}), ${body})`;
+                    return `((__psJoinCoords) => ${body})`;
                 } finally {
                     this.scopeName = parent;
                 }
@@ -276,6 +317,14 @@ export class WebCodeGenerator {
             case "MemberExpression": {
                 const object = this.generateExpression(node.object);
                 return `member(${object}, ${JSON.stringify(node.property)})`;
+            }
+            case "MethodCallExpression": {
+                const object = this.generateExpression(node.object);
+                const args = node.arguments.map((arg) => this.generateExpression(arg.value));
+                if (node.method.name === "offset") return `offsetVector(${object}, ${args.join(", ")})`;
+                if (node.method.name === "add") return `addVectors(${object}, ${args.join(", ")})`;
+                if (node.method.name === "subtract") return `subtractVectors(${object}, ${args.join(", ")})`;
+                return `(() => { throw new Error(${JSON.stringify(`'${node.method.name}' is not a vector method.`)}); })()`;
             }
             case "CallExpression": {
                 const calleeName = node.callee.name;
@@ -317,12 +366,16 @@ export class WebCodeGenerator {
                 const faces = this.generateExpression(node.faces);
                 return `{ tag: "Solid3D", faces: ${faces} }`;
             }
+            case "ExposeBlock": {
+                const fields = node.properties.map((property) =>
+                    `${JSON.stringify(property.name.name)}: ${this.generateExpression(property.value)}`
+                ).join(", ");
+                return `{ ${fields} }`;
+            }
             case "ComponentExpression": {
                 const solid = this.generateExpression(node.solid);
-                const anchors = node.expose.properties.map((property) =>
-                    `partAnchors[${JSON.stringify(property.name.name)}] = ${this.generateExpression(property.value)};`
-                ).join(" ");
-                return `(() => { const partGeometry = ${solid}; const partAnchors = {}; ${anchors} return { tag: "Part", geometry: partGeometry, anchors: partAnchors }; })()`;
+                const expose = this.generateExpression(node.expose);
+                return `(() => { const built = (${solid})(__psCoordinateSystem); const partGeometry = built && built.tag === "Part" ? built.geometry : built; const partAnchors = (${expose})(__psCoordinateSystem); return { tag: "Part", geometry: partGeometry, anchors: partAnchors }; })()`;
             }
             case "ArrayMatchStatement": {
                 const target = this.generateExpression(node.targetArray);
@@ -338,6 +391,28 @@ export class WebCodeGenerator {
                 return `((() => { const _t = ${target}; if (_t.length === 0) return ${onEmpty}; const ${node.headIdentifier.name} = _t[0]; const ${node.tailIdentifier.name} = _t.slice(1); return ${onSplit}; })())`;
             }
         }
+    }
+
+    /** Binds `let (x, (y, z)) = value in` to the elements of a tuple value. */
+    private destructureTuple(pattern: LetPattern, source: string, names: string[]): string {
+        if (pattern.type === "Name") {
+            names.push(pattern.name.name);
+            return `const ${pattern.name.name} = ${source};`;
+        }
+        const count = pattern.elements.length;
+        let out = `if (!${source} || ${source}.tag !== "Tuple" || !Array.isArray(${source}.elements) || ${source}.elements.length !== ${count}) throw new Error(${JSON.stringify(`This value is not a tuple of ${count} values.`)});`;
+        for (let index = 0; index < pattern.elements.length; index++) {
+            const element = pattern.elements[index];
+            if (!element) continue;
+            if (element.type === "Name") {
+                names.push(element.name.name);
+                out += ` const ${element.name.name} = ${source}.elements[${index}];`;
+            } else {
+                const inner = `__psTuple${this.tupleTemp++}`;
+                out += ` const ${inner} = ${source}.elements[${index}]; ${this.destructureTuple(element, inner, names)}`;
+            }
+        }
+        return out;
     }
 
     // User functions are one argument at a time: width => depth => height => body.

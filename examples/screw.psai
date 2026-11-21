@@ -33,21 +33,21 @@ def c5 = 0.0 - 0.003825
 def end_radius = u => c0 + c1 * cos(rad: u) + c2 * cos(rad: 2.0 * u) + c3 * cos(rad: 3.0 * u) + c4 * cos(rad: 4.0 * u) + c5 * cos(rad: 5.0 * u)
 
 // One pitch of the helix. Clockwise in u so the wall faces outward.
-def wall = index => Surface2D(
+def wall = coords => index => Surface2D(
     max_u: 2.0 * pi,
     min_v: u => tip + index * pitch,
     max_v: u => tip + index * pitch + pitch,
-    formula: u => v => Vector(
+    formula: u => v => Vector(coords: coords, 
         x: (c0 + c1 * cos(rad: 1.0 * (2.0 * pi * v / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * v / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * v / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * v / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * v / pitch - u))) * cos(rad: u),
         y: (c0 + c1 * cos(rad: 1.0 * (2.0 * pi * v / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * v / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * v / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * v / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * v / pitch - u))) * (0.0 - sin(rad: u)),
         z: v
     )
 )
 
-def tip_cap = Surface2D(
+def tip_cap = coords => Surface2D(
     max_u: 2.0 * pi,
     min_v: u => 0.0, max_v: end_radius,
-    formula: u => v => Vector(
+    formula: u => v => Vector(coords: coords, 
         x: v * cos(rad: u),
         y: v * (0.0 - sin(rad: u)),
         z: tip
@@ -55,21 +55,21 @@ def tip_cap = Surface2D(
 )
 
 // Short collar and cap buried in the head. They close the shank without showing.
-def collar = Surface2D(
+def collar = coords => Surface2D(
     max_u: 2.0 * pi,
     min_v: u => 0.0, max_v: u => bury,
-    formula: u => v => Vector(
+    formula: u => v => Vector(coords: coords, 
         x: (c0 + c1 * cos(rad: 1.0 * (2.0 * pi * v / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * v / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * v / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * v / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * v / pitch - u))) * cos(rad: u),
         y: (c0 + c1 * cos(rad: 1.0 * (2.0 * pi * v / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * v / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * v / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * v / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * v / pitch - u))) * (0.0 - sin(rad: u)),
         z: v
     )
 )
 
-def shank_cap = Surface2D(
+def shank_cap = coords => Surface2D(
     max_u: 2.0 * pi,
     min_v: u => 0.0,
     max_v: u => c0 + c1 * cos(rad: 1.0 * (2.0 * pi * bury / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * bury / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * bury / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * bury / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * bury / pitch - u)),
-    formula: u => v => Vector(
+    formula: u => v => Vector(coords: coords, 
         x: v * cos(rad: u),
         y: v * sin(rad: u),
         z: bury
@@ -78,30 +78,30 @@ def shank_cap = Surface2D(
 
 // One flat of the hexagon. index 0 starts at 30 degrees and each step is 60 degrees.
 // u runs from the higher-angle vertex back to this one so the flat faces outward.
-def side = index => Surface2D(
+def side = coords => index => Surface2D(
     max_u: 1.0,
     min_v: u => 0.0, max_v: u => head_height,
-    formula: u => v => Vector(
+    formula: u => v => Vector(coords: coords, 
         x: (1.0 - u) * corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + u * corner * cos(rad: index * pi / 3.0 + pi / 6.0),
         y: (1.0 - u) * corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + u * corner * sin(rad: index * pi / 3.0 + pi / 6.0),
         z: v
     )
 )
 
-def head_top = index => Surface2D(
+def head_top = coords => index => Surface2D(
     max_u: 1.0,
     min_v: u => 0.0, max_v: u => 1.0,
-    formula: u => v => Vector(
+    formula: u => v => Vector(coords: coords, 
         x: u * ((1.0 - v) * corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + v * corner * cos(rad: index * pi / 3.0 + pi / 6.0)),
         y: u * ((1.0 - v) * corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + v * corner * sin(rad: index * pi / 3.0 + pi / 6.0)),
         z: head_height
     )
 )
 
-def head_bottom = index => Surface2D(
+def head_bottom = coords => index => Surface2D(
     max_u: 1.0,
     min_v: u => 0.0, max_v: u => 1.0,
-    formula: u => v => Vector(
+    formula: u => v => Vector(coords: coords, 
         x: u * ((1.0 - v) * corner * cos(rad: index * pi / 3.0 + pi / 6.0) + v * corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0)),
         y: u * ((1.0 - v) * corner * sin(rad: index * pi / 3.0 + pi / 6.0) + v * corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0)),
         z: 0.0
@@ -109,62 +109,62 @@ def head_bottom = index => Surface2D(
 )
 
 def M3Screw = Component(
-    solid: Solid3D(faces: [
-        tip_cap,
-        collar,
-        shank_cap,
-        side(index: 0.0),
-        side(index: 1.0),
-        side(index: 2.0),
-        side(index: 3.0),
-        side(index: 4.0),
-        side(index: 5.0),
-        head_top(index: 0.0),
-        head_top(index: 1.0),
-        head_top(index: 2.0),
-        head_top(index: 3.0),
-        head_top(index: 4.0),
-        head_top(index: 5.0),
-        head_bottom(index: 0.0),
-        head_bottom(index: 1.0),
-        head_bottom(index: 2.0),
-        head_bottom(index: 3.0),
-        head_bottom(index: 4.0),
-        head_bottom(index: 5.0),
-        wall(index: 0.0),
-        wall(index: 1.0),
-        wall(index: 2.0),
-        wall(index: 3.0),
-        wall(index: 4.0),
-        wall(index: 5.0),
-        wall(index: 6.0),
-        wall(index: 7.0),
-        wall(index: 8.0),
-        wall(index: 9.0),
-        wall(index: 10.0),
-        wall(index: 11.0),
-        wall(index: 12.0),
-        wall(index: 13.0),
-        wall(index: 14.0),
-        wall(index: 15.0),
-        wall(index: 16.0),
-        wall(index: 17.0),
-        wall(index: 18.0),
-        wall(index: 19.0),
-        wall(index: 20.0),
-        wall(index: 21.0),
-        wall(index: 22.0),
-        wall(index: 23.0),
-        wall(index: 24.0),
-        wall(index: 25.0),
-        wall(index: 26.0),
-        wall(index: 27.0),
-        wall(index: 28.0),
-        wall(index: 29.0),
-        wall(index: 30.0),
-        wall(index: 31.0)
+    solid: coords => Solid3D(faces: [
+        tip_cap(coords: coords),
+        collar(coords: coords),
+        shank_cap(coords: coords),
+        side(coords: coords, index: 0.0),
+        side(coords: coords, index: 1.0),
+        side(coords: coords, index: 2.0),
+        side(coords: coords, index: 3.0),
+        side(coords: coords, index: 4.0),
+        side(coords: coords, index: 5.0),
+        head_top(coords: coords, index: 0.0),
+        head_top(coords: coords, index: 1.0),
+        head_top(coords: coords, index: 2.0),
+        head_top(coords: coords, index: 3.0),
+        head_top(coords: coords, index: 4.0),
+        head_top(coords: coords, index: 5.0),
+        head_bottom(coords: coords, index: 0.0),
+        head_bottom(coords: coords, index: 1.0),
+        head_bottom(coords: coords, index: 2.0),
+        head_bottom(coords: coords, index: 3.0),
+        head_bottom(coords: coords, index: 4.0),
+        head_bottom(coords: coords, index: 5.0),
+        wall(coords: coords, index: 0.0),
+        wall(coords: coords, index: 1.0),
+        wall(coords: coords, index: 2.0),
+        wall(coords: coords, index: 3.0),
+        wall(coords: coords, index: 4.0),
+        wall(coords: coords, index: 5.0),
+        wall(coords: coords, index: 6.0),
+        wall(coords: coords, index: 7.0),
+        wall(coords: coords, index: 8.0),
+        wall(coords: coords, index: 9.0),
+        wall(coords: coords, index: 10.0),
+        wall(coords: coords, index: 11.0),
+        wall(coords: coords, index: 12.0),
+        wall(coords: coords, index: 13.0),
+        wall(coords: coords, index: 14.0),
+        wall(coords: coords, index: 15.0),
+        wall(coords: coords, index: 16.0),
+        wall(coords: coords, index: 17.0),
+        wall(coords: coords, index: 18.0),
+        wall(coords: coords, index: 19.0),
+        wall(coords: coords, index: 20.0),
+        wall(coords: coords, index: 21.0),
+        wall(coords: coords, index: 22.0),
+        wall(coords: coords, index: 23.0),
+        wall(coords: coords, index: 24.0),
+        wall(coords: coords, index: 25.0),
+        wall(coords: coords, index: 26.0),
+        wall(coords: coords, index: 27.0),
+        wall(coords: coords, index: 28.0),
+        wall(coords: coords, index: 29.0),
+        wall(coords: coords, index: 30.0),
+        wall(coords: coords, index: 31.0)
     ]),
-    expose: {}
+    expose: coords => {}
 )
 
 export(M3Screw)

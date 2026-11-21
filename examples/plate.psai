@@ -12,191 +12,108 @@ parameters {
     },
     holes: {
         radius: 3.0,
-        span: 16.0,
-        count: 5.0,
-        pitch: 12.0,
-        columns: [0.0, 1.0, 2.0, 3.0, 4.0]
+        count_width: 5.0,
+        count_depth: 3.0,
+        margin: 5.0
     },
     pins: {
         radius: 3.0,
         height: 12.0,
-        count: 7.0,
-        bite: 1.0,
-        ring: 40.0,
-        indexes: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        count: 7.0
     }
 }
 
 // pi is a value the whole script shares.
 def pi = 3.14159265359
 
-// A round cap. A cylinder calls this twice, at the bottom and at the top.
-def Disk = radius => z => Surface2D(
-    max_u: 2.0 * pi,
-    min_v: u => 0.0, max_v: u => radius,
-    formula: u => v => Vector(
-        x: v * cos(rad: u),
-        y: v * sin(rad: u),
-        z: z
+def Box = width => depth => height =>
+    Component(
+        solid: coords =>
+            let top = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
+            let bottom = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
+            let front = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
+            let back = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
+            let left = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: 0, y: u, z: v)) in
+            let right = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
+            Solid3D(faces: [
+                top,
+                bottom,
+                front,
+                back,
+                left,
+                right
+            ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
     )
-)
 
-// The round wall. This is a face, the same kind of 2D surface as Disk.
-def Tube = radius => height => Surface2D(
-    max_u: 2.0 * pi,
-    min_v: u => 0.0, max_v: u => height,
-    formula: u => v => Vector(
-        x: radius * cos(rad: u),
-        y: radius * sin(rad: u),
-        z: v
+def Cylinder = radius => height =>
+    let Disk = coords => radius => z => Surface2D(
+        max_u: 2.0 * pi,
+        min_v: u => 0.0, max_v: u => radius,
+        formula: u => v => Vector(coords: coords, 
+            x: v * cos(rad: u),
+            y: v * sin(rad: u),
+            z: z
+        )
+    ) in
+    let Tube = coords => radius => height => Surface2D(
+        max_u: 2.0 * pi,
+        min_v: u => 0.0, max_v: u => height,
+        formula: u => v => Vector(coords: coords, 
+            x: radius * cos(rad: u),
+            y: radius * sin(rad: u),
+            z: v
+        )
+    ) in
+    Component(
+        solid: coords =>
+            let bottom = Disk(coords: coords, radius: radius, z: 0.0) in
+            let top = Disk(coords: coords, radius: radius, z: height) in
+            Solid3D(faces: [
+                Tube(coords: coords, radius: radius, height: height),
+                bottom,
+                top
+            ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            top: Vector(coords: coords, x: 0.0, y: 0.0, z: height),
+            center: Vector(coords: coords, x: 0.0, y: 0.0, z: height / 2.0)
+        }
     )
-)
 
-// The rectangular solid: six faces. Centered on X and Y, standing on z = 0.
-// origin is the center. top is the center of the top face.
-def Box = width => depth => height => Component(
-    solid: Solid3D(faces: [
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(x: u - (width / 2.0), y: v - (depth / 2.0), z: 0.0)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(x: u - (width / 2.0), y: v - (depth / 2.0), z: height)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u - (width / 2.0), y: 0.0 - (depth / 2.0), z: v)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u - (width / 2.0), y: depth / 2.0, z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: 0.0 - (width / 2.0), y: u - (depth / 2.0), z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: width / 2.0, y: u - (depth / 2.0), z: v))
-    ]),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        origin: Vector(x: 0.0, y: 0.0, z: height / 2.0),
-        top: Vector(x: 0.0, y: 0.0, z: height)
-    }
-)
+export(Cylinder(radius: 10, height: 10))
 
-// A square box. size is the width and the depth.
-def Plate = size => thickness => Box(width: size, depth: size, height: thickness)
-
-// One centered grid point. column and row count from 0.
-def grid_point = column_count => row_count => column_pitch => row_pitch => column => row => Vector(
-    x: (column - ((column_count - 1.0) / 2.0)) * column_pitch,
-    y: (row - ((row_count - 1.0) / 2.0)) * row_pitch,
-    z: 0.0
-)
-
-def row_points = column_count => row_count => column_pitch => row_pitch => columns => row => columns
-    |> map(f: item => grid_point(column_count: column_count, row_count: row_count, column_pitch: column_pitch, row_pitch: row_pitch, column: item, row: row))
-
-def append_points = left => right => match left {
-    [] => right,
-    head :: tail => head :: append_points(left: tail, right: right)
-}
-
-def flatten_rows = rows => match rows {
-    [] => [],
-    head :: tail => append_points(left: head, right: flatten_rows(rows: tail))
-}
-
-// The grid of points. columns and rows each have one entry per count, from 0.
-def rectangular_pattern = column_count => row_count => column_pitch => row_pitch => columns => rows => rows
-    |> map(f: item => row_points(column_count: column_count, row_count: row_count, column_pitch: column_pitch, row_pitch: row_pitch, columns: columns, row: item))
-    |> flatten_rows
-
-// The points of a circle in the plate's plane. indexes has one entry per point, from 0.
-def circular_pattern = point_count => radius => indexes => indexes
-    |> map(f: item => Vector(
-        x: radius * cos(rad: item * (2.0 * pi / point_count)),
-        y: radius * sin(rad: item * (2.0 * pi / point_count)),
-        z: 0.0
-    ))
-
-// A cylinder for one point. radius and height belong to this call, so each point can differ.
-// at is the point, kept on the cylinder so the plate can seat it.
-def CylinderAt = radius => height => at => Component(
-    solid: Solid3D(faces: [
-        Tube(radius: radius, height: height),
-        Disk(radius: radius, z: 0.0),
-        Disk(radius: radius, z: height)
-    ]),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        bottom: Vector(x: 0.0, y: 0.0, z: 0.0),
-        top: Vector(x: 0.0, y: 0.0, z: height),
-        center: Vector(x: 0.0, y: 0.0, z: height / 2.0),
-        at: at
-    }
-)
-
-// Cut one cylinder from the plate. The result is that plate, and it still exposes origin and top.
-// The center meets the plate's center, shifted by the point.
-def subtract_cylinder = plate => placed => Component(
-    solid: join(
-        frame: plate,
-        placed: placed,
-        using: frame => placed => align(
-            planar: meet(frame: plate.up, placed: placed.up),
-            translation: meet(frame: plate.origin + placed.at, placed: placed.center),
-            rotation: meet(frame: plate.right, placed: placed.right)
-        ),
-        combine: frame => placed => frame - placed
-    ),
-    expose: { up: plate.up, right: plate.right, origin: plate.origin, top: plate.top }
-)
-
-// map builds the cylinders. It cannot cut them, because each cut needs the plate the previous cut returned.
-def subtract_cylinders = plate => cylinders => match cylinders {
-    [] => plate,
-    head :: tail => subtract_cylinders(
-        plate: subtract_cylinder(plate: plate, placed: head),
-        cylinders: tail
-    )
-}
-
-// Add one cylinder to the plate. Its base meets the plate's top, shifted by the point.
-def add_cylinder = plate => placed => Component(
-    solid: join(
-        frame: plate,
-        placed: placed,
-        using: frame => placed => align(
-            planar: meet(frame: plate.up, placed: placed.up),
-            translation: meet(frame: plate.top + placed.at, placed: placed.bottom),
-            rotation: meet(frame: plate.right, placed: placed.right)
-        ),
-        combine: frame => placed => frame + placed
-    ),
-    expose: { up: plate.up, right: plate.right, origin: plate.origin, top: plate.top }
-)
-
-def add_cylinders = plate => cylinders => match cylinders {
-    [] => plate,
-    head :: tail => add_cylinders(
-        plate: add_cylinder(plate: plate, placed: head),
-        cylinders: tail
-    )
-}
-
-// The grid, then one cylinder per point, then those cylinders cut out of this plate.
-def cut_holes = plate => rectangular_pattern(
-    column_count: $holes.count,
-    row_count: $holes.count,
-    column_pitch: $holes.pitch,
-    row_pitch: $holes.pitch,
-    columns: $holes.columns,
-    rows: $holes.columns
-)
-    |> map(f: item => CylinderAt(radius: $holes.radius, height: $holes.span, at: item))
-    |> subtract_cylinders(plate: plate)
-
-// The circle, sunk by $pins.bite, then one pin per point, added to the plate.
-def add_pins = plate => circular_pattern(
-    point_count: $pins.count,
-    radius: $pins.ring,
-    indexes: $pins.indexes
-)
-    |> map(f: item => item + Vector(x: 0.0, y: 0.0, z: 0.0 - $pins.bite))
-    |> map(f: item => CylinderAt(radius: $pins.radius, height: $pins.height, at: item))
-    |> add_cylinders(plate: plate)
-
-def patterned_plate = cut_holes >> add_pins
-
-export(patterned_plate(
-    plate: Plate(size: $plate.size, thickness: $plate.thickness)
-))
+//// A square box. size is the width and the depth.
+//def Plate = Box(width: $plate.size, depth: $plate.size, height: $plate.thickness)
+//
+//export(Plate)

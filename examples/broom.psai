@@ -3,203 +3,329 @@ setup {
     coordinate_system: "Z-up"
 }
 
-// A broom standing on its bristles. Cylinder is written once. The handle,
-// the ferrule, and the hanging hole are three calls. The join turns the hole
-// so its axis lies across the handle. origin is where the renderer hangs the broom.
+parameters {
+    handle: {
+        radius: 11.0,
+        length: 1000.0,
+        embed: 14.0
+    },
+    hang: {
+        radius: 4.0,
+        from_top: 30.0
+    },
+    head: {
+        width: 240.0,
+        depth: 50.0,
+        height: 24.0
+    },
+    ferrule: {
+        radius: 16.0,
+        height: 36.0,
+        bite: 1.0
+    },
+    bristles: {
+        height: 90.0,
+        bite: 3.0,
+        top: {
+            width: 220.0,
+            depth: 36.0
+        },
+        bottom: {
+            width: 300.0,
+            depth: 68.0
+        }
+    }
+}
+
 def pi = 3.14159265359
 
-def handle_r = 11.0
-def handle_len = 1000.0
-def hang_r = 4.0
-def hang_from_top = 30.0
-def hang_span = handle_r * 2.0 + 8.0
-
-def head_w = 240.0
-def head_d = 50.0
-def head_h = 24.0
-
-def ferrule_r = 16.0
-def ferrule_h = 36.0
-def ferrule_bite = 1.0
-def embed = 14.0
-
-def bristle_h = 90.0
-def bristle_bite = 3.0
-def top_hw = 110.0
-def top_hd = 18.0
-def bot_hw = 150.0
-def bot_hd = 34.0
-
-// The handle passes through the ferrule and sinks this far into the head.
-def socket = ferrule_h - ferrule_bite + embed
-def handle_bottom = head_h - embed
-def handle_top = handle_bottom + handle_len
-def bristle_tip = bristle_bite - bristle_h
-
-// A round cap in the XY plane. The bottom and the top are two calls.
-def Disk = radius => z => Surface2D(
-    max_u: 2.0 * pi,
-    min_v: u => 0.0, max_v: u => radius,
-    formula: u => v => Vector(
-        x: v * cos(rad: u),
-        y: v * sin(rad: u),
-        z: z
+def Cylinder = radius => height =>
+    Component(
+        solid: coords =>
+            let Disk = z => Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => radius,
+                formula: u => v => Vector(coords: coords, 
+                    x: v * cos(rad: u),
+                    y: v * sin(rad: u),
+                    z: z)) in
+            let wall = Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, 
+                    x: radius * cos(rad: u),
+                    y: radius * sin(rad: u),
+                    z: v)) in
+            let bottom = Disk(z: 0.0) in
+            let top = Disk(z: height) in
+            Solid3D(faces: [
+                    wall,
+                    bottom,
+                    top
+                ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            forward: Vector(coords: coords, x: 0.0, y: 1.0, z: 0.0),
+            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            top: Vector(coords: coords, x: 0.0, y: 0.0, z: height),
+            center: Vector(coords: coords, x: 0.0, y: 0.0, z: height / 2.0)
+        }
     )
-)
 
-// The round wall. This is a face, the same kind of 2D surface as Disk.
-def Tube = radius => height => Surface2D(
-    max_u: 2.0 * pi,
-    min_v: u => 0.0, max_v: u => height,
-    formula: u => v => Vector(
-        x: radius * cos(rad: u),
-        y: radius * sin(rad: u),
-        z: v
+def Box = width => depth => height =>
+    Component(
+        solid: coords =>
+            let top = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
+            let bottom = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
+            let front = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
+            let back = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
+            let left = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: 0, y: u, z: v)) in
+            let right = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
+            Solid3D(faces: [
+                    top,
+                    bottom,
+                    front,
+                    back,
+                    left,
+                    right
+                ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            top: Vector(coords: coords, x: width/2.0, y: depth/2.0, z: height)
+        }
     )
-)
 
-// One round solid: one tube and two disks. up is its axis. bottom, center, and top sit on that axis.
-def Cylinder = radius => height => Component(
-    solid: Solid3D(faces: [
-        Tube(radius: radius, height: height),
-        Disk(radius: radius, z: 0.0),
-        Disk(radius: radius, z: height)
-    ]),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        bottom: Vector(x: 0.0, y: 0.0, z: 0.0),
-        top: Vector(x: 0.0, y: 0.0, z: height),
-        center: Vector(x: 0.0, y: 0.0, z: height / 2.0)
-    }
-)
+def Bristles =
+    Component(
+        solid: coords =>
+            let bottom = Surface2D(
+                max_u: $bristles.bottom.width,
+                min_v: u => 0.0,
+                max_v: u => $bristles.bottom.depth,
+                formula: u => v => Vector(coords: coords, 
+                    x: u - ($bristles.bottom.width / 2.0),
+                    y: v - ($bristles.bottom.depth / 2.0),
+                    z: 0.0)) in
+            let top = Surface2D(
+                max_u: $bristles.top.width,
+                min_v: u => 0.0,
+                max_v: u => $bristles.top.depth,
+                formula: u => v => Vector(coords: coords, 
+                    x: u - ($bristles.top.width / 2.0),
+                    y: v - ($bristles.top.depth / 2.0),
+                    z: $bristles.height)) in
 
-def Handle = Cylinder(radius: handle_r, height: handle_len)
-def HangHole = Cylinder(radius: hang_r, height: hang_span)
-def Ferrule = Cylinder(radius: ferrule_r, height: ferrule_h)
+            let f = t => b => u => 
+                0.5*(($bristles.height-u)*b / $bristles.height) + 0.5*(u*t / $bristles.height) in
 
-// Turn the hole so its axis lies along Y, centered hang_from_top below the handle top.
-def Stick = Component(
-    solid: join(frame: Handle, placed: HangHole, using: frame => placed => align(
-        planar: meet(frame: Vector(x: 0.0, y: 1.0, z: 0.0), placed: placed.up),
-        translation: meet(frame: frame.top + Vector(x: 0.0, y: 0.0, z: 0.0 - hang_from_top), placed: placed.center),
-        rotation: meet(frame: frame.right, placed: placed.right)
-    ), combine: frame => placed => frame - placed),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        bottom: Vector(x: 0.0, y: 0.0, z: 0.0)
-    }
-)
+            let face = bottom => top => x_projection => y_projection =>
+                let max_v = f(t: top, b: bottom) in
+                Surface2D(
+                    max_u: $bristles.height,
+                    min_v: u => 0.0-max_v(u: u),
+                    max_v: max_v,
+                    formula: u => v => Vector(coords: coords, 
+                        x: x_projection(u: u, v: v),
+                        y: y_projection(u: u, v: v),
+                        z: u
+                    )
+                ) in
+                
+            let front = face(
+                bottom: $bristles.bottom.width,
+                top: $bristles.top.width, 
+                x_projection: u=>v=>v, 
+                y_projection: u=>v=>f(
+                    t: $bristles.top.depth, 
+                    b: $bristles.bottom.depth, 
+                    u: u)) in
+            let back = face(
+                bottom: $bristles.bottom.width,
+                top: $bristles.top.width, 
+                x_projection: u=>v=>v, 
+                y_projection: u=>v=>0.0-f(
+                    t: $bristles.top.depth,
+                    b: $bristles.bottom.depth,
+                    u: u)) in
+            let left = face(
+                bottom: $bristles.bottom.depth,
+                top: $bristles.top.depth,
+                x_projection: u=>v=>0.0-f(
+                    t: $bristles.top.width,
+                    b: $bristles.bottom.width,
+                    u: u),
+                y_projection:u=>v=>v) in
+            let right = face(
+                bottom: $bristles.bottom.depth,
+                top: $bristles.top.depth,
+                x_projection: u=>v=>f(
+                    t: $bristles.top.width,
+                    b: $bristles.bottom.width,
+                    u: u),
+                y_projection:u=>v=>v) in
+            Solid3D(faces: [
+                    bottom,
+                    top,
+                    back,
+                    front,
+                    left,
+                    right
+                ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            top: Vector(coords: coords, x: 0.0, y: 0.0, z: $bristles.height)
+        }
+    )
 
-def Head = Component(
-    solid: Solid3D(faces: [
-        Surface2D(max_u: head_w, min_v: u => 0.0, max_v: u => head_d, formula: u => v => Vector(x: u, y: v, z: 0.0)),
-        Surface2D(max_u: head_w, min_v: u => 0.0, max_v: u => head_d, formula: u => v => Vector(x: u, y: v, z: head_h)),
-        Surface2D(max_u: head_w, min_v: u => 0.0, max_v: u => head_h, formula: u => v => Vector(x: u, y: 0.0, z: v)),
-        Surface2D(max_u: head_w, min_v: u => 0.0, max_v: u => head_h, formula: u => v => Vector(x: u, y: head_d, z: v)),
-        Surface2D(max_u: head_d, min_v: u => 0.0, max_v: u => head_h, formula: u => v => Vector(x: 0.0, y: u, z: v)),
-        Surface2D(max_u: head_d, min_v: u => 0.0, max_v: u => head_h, formula: u => v => Vector(x: head_w, y: u, z: v))
-    ]),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        top: Vector(x: head_w / 2.0, y: head_d / 2.0, z: head_h)
-    }
-)
-
-def Collar = Component(
-    solid: join(frame: Head, placed: Ferrule, using: frame => placed => align(
-        planar: meet(frame: frame.up, placed: placed.up),
-        translation: meet(frame: frame.top + Vector(x: 0.0, y: 0.0, z: 0.0 - ferrule_bite), placed: placed.bottom),
-        rotation: meet(frame: frame.right, placed: placed.right)
-    ), combine: frame => placed => frame + placed),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        top: Vector(x: head_w / 2.0, y: head_d / 2.0, z: head_h - ferrule_bite + ferrule_h)
-    }
-)
-
-def Headed = Component(
-    solid: join(frame: Collar, placed: Stick, using: frame => placed => align(
-        planar: meet(frame: frame.up, placed: placed.up),
-        translation: meet(frame: frame.top + Vector(x: 0.0, y: 0.0, z: 0.0 - socket), placed: placed.bottom),
-        rotation: meet(frame: frame.right, placed: placed.right)
-    ), combine: frame => placed => frame + placed),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        seat: Vector(x: head_w / 2.0, y: head_d / 2.0, z: 0.0)
-    }
-)
-
-// The skirt is narrow where it enters the head and wider at the floor.
-def Bristles = Component(
-    solid: Solid3D(faces: [
-        Surface2D(
-            max_u: bot_hw * 2.0,
-            min_v: u => 0.0, max_v: u => bot_hd * 2.0,
-            formula: u => v => Vector(x: u - bot_hw, y: v - bot_hd, z: 0.0)
+def Broom =
+    let handle = Cylinder(
+        radius: $handle.radius,
+        height: $handle.length) in
+    let hang_hole = Cylinder(
+        radius: $hang.radius,
+        height: $handle.radius * 2.0 + 8.0) in
+    let socket = $ferrule.height - $ferrule.bite + $handle.embed in
+    let handle_bottom = $head.height - $handle.embed in
+    let handle_top = handle_bottom + $handle.length in
+    let bristle_tip = $bristles.bite - $bristles.height in
+    let stick = Component(
+        solid: join(
+            frame: handle,
+            placed: hang_hole,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.forward,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.top.offset(x: 0.0,
+                        y: 0.0,
+                        z: 0.0 - $hang.from_top),
+                    placed: placed.center),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame - placed
         ),
-        Surface2D(
-            max_u: top_hw * 2.0,
-            min_v: u => 0.0, max_v: u => top_hd * 2.0,
-            formula: u => v => Vector(x: u - top_hw, y: v - top_hd, z: bristle_h)
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    ) in
+    let collar = Component(
+        solid: join(
+            frame: Box(
+                width: $head.width,
+                depth: $head.depth,
+                height: $head.height),
+            placed: Cylinder(
+                radius: $ferrule.radius,
+                height: $ferrule.height)
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.top.offset(x: 0.0,
+                        y: 0.0,
+                        z: 0.0 - $ferrule.bite),
+                    placed: placed.bottom),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
         ),
-        Surface2D(
-            max_u: bristle_h,
-            min_v: u => 0.0, max_v: u => 1.0,
-            formula: u => v => Vector(
-                x: (0.0 - (bot_hw + (top_hw - bot_hw) * (u / bristle_h))) + v * 2.0 * (bot_hw + (top_hw - bot_hw) * (u / bristle_h)),
-                y: 0.0 - (bot_hd + (top_hd - bot_hd) * (u / bristle_h)),
-                z: u
-            )
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            top: Vector(coords: coords, 
+                x: $head.width / 2.0,
+                y: $head.depth / 2.0,
+                z: $head.height - $ferrule.bite + $ferrule.height)
+        }
+    ) in
+    let headed = Component(
+        solid: join(
+            frame: collar,
+            placed: stick,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.top.offset(x: 0.0,
+                        y: 0.0,
+                        z: 0.0 - socket),
+                    placed: placed.bottom),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
         ),
-        Surface2D(
-            max_u: bristle_h,
-            min_v: u => 0.0, max_v: u => 1.0,
-            formula: u => v => Vector(
-                x: (0.0 - (bot_hw + (top_hw - bot_hw) * (u / bristle_h))) + v * 2.0 * (bot_hw + (top_hw - bot_hw) * (u / bristle_h)),
-                y: bot_hd + (top_hd - bot_hd) * (u / bristle_h),
-                z: u
-            )
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            seat: Vector(coords: coords, x: $head.width / 2.0, y: $head.depth / 2.0, z: 0.0)
+        }
+    ) in
+    Component(
+        solid: join(
+            frame: headed,
+            placed: Bristles,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.seat.offset(x: 0.0,
+                        y: 0.0,
+                        z: $bristles.bite),
+                    placed: placed.top),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
         ),
-        Surface2D(
-            max_u: bristle_h,
-            min_v: u => 0.0, max_v: u => 1.0,
-            formula: u => v => Vector(
-                x: 0.0 - (bot_hw + (top_hw - bot_hw) * (u / bristle_h)),
-                y: (0.0 - (bot_hd + (top_hd - bot_hd) * (u / bristle_h))) + v * 2.0 * (bot_hd + (top_hd - bot_hd) * (u / bristle_h)),
-                z: u
-            )
-        ),
-        Surface2D(
-            max_u: bristle_h,
-            min_v: u => 0.0, max_v: u => 1.0,
-            formula: u => v => Vector(
-                x: bot_hw + (top_hw - bot_hw) * (u / bristle_h),
-                y: (0.0 - (bot_hd + (top_hd - bot_hd) * (u / bristle_h))) + v * 2.0 * (bot_hd + (top_hd - bot_hd) * (u / bristle_h)),
-                z: u
-            )
-        )
-    ]),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        top: Vector(x: 0.0, y: 0.0, z: bristle_h)
-    }
-)
-
-def Broom = Component(
-    solid: join(frame: Headed, placed: Bristles, using: frame => placed => align(
-        planar: meet(frame: frame.up, placed: placed.up),
-        translation: meet(frame: frame.seat + Vector(x: 0.0, y: 0.0, z: bristle_bite), placed: placed.top),
-        rotation: meet(frame: frame.right, placed: placed.right)
-    ), combine: frame => placed => frame + placed),
-    expose: {
-        origin: Vector(x: head_w / 2.0, y: head_d / 2.0, z: (handle_top + bristle_tip) / 2.0)
-    }
-)
+        expose: coords => {
+            origin: Vector(coords: coords, 
+                x: $head.width / 2.0,
+                y: $head.depth / 2.0,
+                z: (handle_top + bristle_tip) / 2.0)
+        }
+    )
 
 export(Broom)

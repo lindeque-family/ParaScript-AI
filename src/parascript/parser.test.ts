@@ -7,7 +7,7 @@ import { test } from "node:test";
 // @ts-ignore -- Node.js type declarations are optional in this project.
 import assert from "node:assert/strict";
 import { Parser } from "./parser.js"; 
-import type { ComponentExpression, VariableDeclaration } from "./ast.js";
+import type { BinaryExpression, ComponentExpression, JoinDomain, MethodCallExpression, TupleLetExpression, TupleLiteral, VariableDeclaration } from "./ast.js";
 
 test("Global Setup Block Parsing", () => {
     const source = `
@@ -29,7 +29,7 @@ test("Global Setup Block Parsing", () => {
 test("Variable Declaration and Curried Lambda Trajectories", () => {
     const source = `
         setup { units: "inch", coordinate_system: "Y-up" }
-        def my_trajectory = Curve1D(max_t: 10.0, formula: t => Vector(x: t, y: t * 2.0, z: 0.0))
+        def my_trajectory = Curve1D(max_t: 10.0, formula: t => Vector(coords: coords, x: t, y: t * 2.0, z: 0.0))
     `;
     const parser = new Parser(source);
     const ast = parser.parse();
@@ -107,9 +107,9 @@ test("component returns a part and publishes its anchors", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
         def CustomShaft = Component(
-            solid: Solid3D(faces: [Cube(size: 1.0)]),
-            expose: {
-                mating_crosshair: l => Vector(x: 0.0, y: 0.0, z: 0.0)
+            solid: coords => Solid3D(faces: [Cube(size: 1.0)]),
+            expose: coords => {
+                mating_crosshair: l => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
             }
         )
     `;
@@ -119,8 +119,13 @@ test("component returns a part and publishes its anchors", () => {
     const comp = decl.value as ComponentExpression;
 
     assert.equal(comp.type, "ComponentExpression");
-    assert.equal(comp.solid.type, "Solid3DNode");
-    const firstExpose = comp.expose.properties[0];
+    assert.equal(comp.solid.type, "LambdaExpression");
+    if (comp.solid.type !== "LambdaExpression") return;
+    assert.equal(comp.solid.parameter.name, "coords");
+    assert.equal(comp.solid.body.type, "Solid3DNode");
+    assert.equal(comp.expose.type, "LambdaExpression");
+    if (comp.expose.type !== "LambdaExpression" || comp.expose.body.type !== "ExposeBlock") return;
+    const firstExpose = comp.expose.body.properties[0];
     assert.ok(firstExpose);
     assert.equal(firstExpose.name.name, "mating_crosshair");
     assert.equal(firstExpose.value.type, "LambdaExpression");
@@ -130,16 +135,19 @@ test("Expose accepts a vector anchor and member access reads it", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
         def Outer = Component(
-            solid: Solid3D(faces: []),
-            expose: { cavity: Vector(x: 3.0, y: 3.0, z: 3.0) }
+            solid: coords => Solid3D(faces: []),
+            expose: coords => { cavity: Vector(coords: coords, x: 3.0, y: 3.0, z: 3.0) }
         )
         def seat = Outer.cavity
     `;
     const ast = new Parser(source).parse();
     const comp = (ast.body[0] as VariableDeclaration).value as ComponentExpression;
-    const exposed = comp.expose.properties[0];
+    assert.equal(comp.expose.type, "LambdaExpression");
+    if (comp.expose.type !== "LambdaExpression" || comp.expose.body.type !== "ExposeBlock") return;
+    const exposed = comp.expose.body.properties[0];
     assert.ok(exposed);
     assert.equal(exposed.value.type, "VectorLiteral");
+    assert.equal(exposed.value.coords.type, "Identifier");
     const decl = ast.body[1] as VariableDeclaration;
     assert.equal(decl.value.type, "MemberExpression");
     if (decl.value.type === "MemberExpression") {
@@ -327,21 +335,27 @@ test("Cons Operator Right-Associativity Structural Nesting", () => {
 test("A component root can be a join of components", () => {
     const source = `
         setup { units: "mm", coordinate_system: "Z-up" }
-        def Left = Component(solid: Solid3D(faces: []), expose: {})
+        def Left = Component(solid: coords => Solid3D(faces: []), expose: coords => {})
         def Pair = Component(
             solid: join(frame: Left, placed: Left, using: frame => placed => mate, combine: frame => placed => frame + placed),
-            expose: {}
+            expose: coords => {}
         )
     `;
     const ast = new Parser(source).parse();
     const pair = (ast.body[1] as VariableDeclaration).value as ComponentExpression;
     assert.equal(pair.type, "ComponentExpression");
     assert.equal(pair.solid.type, "JoinDomain");
-    if (pair.solid.type !== "JoinDomain" || pair.solid.combine.type !== "LambdaExpression" || pair.solid.combine.body.type !== "LambdaExpression" || pair.solid.combine.body.body.type !== "BinaryExpression") {
+    if (pair.solid.type !== "JoinDomain") return;
+    const joined = pair.solid;
+    assert.equal(joined.coords, undefined);
+    if (joined.combine.type !== "LambdaExpression" || joined.combine.body.type !== "LambdaExpression" || joined.combine.body.body.type !== "BinaryExpression") {
         assert.fail("pair solid is a join of the two parts");
     }
-    assert.equal(pair.solid.combine.body.body.operator, "+");
-    assert.equal(pair.expose.properties.length, 0);
+    assert.equal(joined.combine.body.body.operator, "+");
+    if (pair.expose.type !== "LambdaExpression" || pair.expose.body.type !== "ExposeBlock") {
+        assert.fail("pair expose is coords => {}");
+    }
+    assert.equal(pair.expose.body.properties.length, 0);
 });
 
 test("Join domain binds two solids and a result", () => {
@@ -365,6 +379,53 @@ test("Join domain binds two solids and a result", () => {
     assert.equal(join.combine.body.body.operator, "-");
     assert.equal(join.combine.body.body.left.name, "frame");
     assert.equal(join.combine.body.body.right.name, "placed");
+    assert.equal(join.coords, undefined);
+});
+
+test("join takes the coordinate system last", () => {
+    const withCoords = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def cut = join(frame: Block(), placed: Hole(), using: frame => placed => mate, combine: frame => placed => frame - placed, coords: frame.coords)
+    `;
+    const join = (new Parser(withCoords).parse().body[0] as VariableDeclaration).value as JoinDomain;
+    assert.equal(join.type, "JoinDomain");
+    assert.equal(join.coords?.type, "MemberExpression");
+
+    assert.throws(() => new Parser(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def cut = join(frame: Block(), placed: Hole(), using: frame => placed => mate, combine: frame => placed => frame - placed, coords: frame.coords, frame: Block())
+    `).parse(), /Parser Error: join takes the coordinate system last/);
+
+    assert.throws(() => new Parser(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def cut = join(frame: Block(), placed: Hole(), using: frame => placed => mate, combine: frame => placed => frame - placed, seat: frame.at)
+    `).parse(), /Parser Error: join accepts frame, placed, using, combine, and coords/);
+});
+
+test("let binds a name for the expression after in", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def cap = radius =>
+            let bottom = Disk(radius: radius, z: 0.0) in
+            let top = Disk(radius: radius, z: radius) in
+            bottom
+    `;
+    const decl = new Parser(source).parse().body[0] as VariableDeclaration;
+    const outer = decl.value;
+    assert.equal(outer.type, "LambdaExpression");
+    if (outer.type !== "LambdaExpression") return;
+    assert.equal(outer.body.type, "LetExpression");
+    if (outer.body.type !== "LetExpression") return;
+    assert.equal(outer.body.name.name, "bottom");
+    assert.equal(outer.body.body.type, "LetExpression");
+    if (outer.body.body.type !== "LetExpression") return;
+    assert.equal(outer.body.body.name.name, "top");
+    assert.equal(outer.body.body.body.type, "Identifier");
+
+    assert.throws(() => new Parser(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def bad = let bottom = 1.0 bottom
+    `).parse(), /Expected 'in' after the let binding/);
 });
 
 test("Join needs a combine", () => {
@@ -373,4 +434,66 @@ test("Join needs a combine", () => {
         def cut = join(frame: Block(), placed: Hole(), using: frame => placed => mate)
     `;
     assert.throws(() => new Parser(missingCombine).parse(), /Parser Error: join needs frame, placed, using, and combine/);
+});
+
+test("a vector method is a named call on the vector", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def moved = Mark.at.offset(x: 1.0, y: 0.0, z: 0.0)
+        def sum = Mark.at.add(vector: Mark.up)
+    `;
+    const body = new Parser(source).parse().body;
+    const moved = (body[0] as VariableDeclaration).value as MethodCallExpression;
+    assert.equal(moved.type, "MethodCallExpression");
+    assert.equal(moved.method.name, "offset");
+    assert.equal(moved.object.type, "MemberExpression");
+    assert.deepEqual(moved.arguments.map((arg) => arg.name.name), ["x", "y", "z"]);
+    const sum = (body[1] as VariableDeclaration).value as MethodCallExpression;
+    assert.equal(sum.method.name, "add");
+    assert.equal(sum.arguments[0]?.name.name, "vector");
+});
+
+test("a tuple keeps each value and parentheses without a comma group", () => {
+    const source = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def pair = (1.0, 2.0 + 3.0)
+        def grouped = (1.0 + 2.0)
+        def swap = pair => let (x, (y, z)) = pair in (z, y, x)
+    `;
+    const body = new Parser(source).parse().body;
+    const pair = (body[0] as VariableDeclaration).value as TupleLiteral;
+    assert.equal(pair.type, "TupleLiteral");
+    assert.equal(pair.elements.length, 2);
+    assert.equal(pair.elements[1]?.type, "BinaryExpression");
+    const grouped = (body[1] as VariableDeclaration).value as BinaryExpression;
+    assert.equal(grouped.type, "BinaryExpression");
+    const swap = (body[2] as VariableDeclaration).value;
+    assert.equal(swap.type, "LambdaExpression");
+    if (swap.type !== "LambdaExpression") return;
+    const taken = swap.body as TupleLetExpression;
+    assert.equal(taken.type, "TupleLetExpression");
+    assert.equal(taken.pattern.type, "Tuple");
+    if (taken.pattern.type !== "Tuple") return;
+    assert.equal(taken.pattern.elements[1]?.type, "Tuple");
+    assert.equal(taken.body.type, "TupleLiteral");
+
+    assert.throws(() => new Parser(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def one = (1.0,)
+    `).parse(), /A tuple needs at least two elements/);
+    assert.throws(() => new Parser(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def none = ()
+    `).parse(), /A tuple needs at least two elements/);
+    assert.throws(() => new Parser(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def bad: (item: number, vector) = (1.0, 2.0)
+    `).parse(), /A tuple type is \(number, vector\)/);
+});
+
+test("Vector takes a coordinate system before the axes", () => {
+    assert.throws(() => new Parser(`
+        setup { units: "mm", coordinate_system: "Z-up" }
+        def up = Vector(x: 0.0, y: 0.0, z: 1.0)
+    `).parse(), /Parser Error: Vector needs a coordinate system first\. \(Found 'x'/);
 });

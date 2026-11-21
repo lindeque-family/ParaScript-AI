@@ -18,6 +18,7 @@ export type NodeType =
     | "StringLiteral"
     | "VectorLiteral"
     | "ArrayLiteral"
+    | "TupleLiteral"
     | "ArrayMatchStatement" // Structured array pattern mapping node
     | "BinaryExpression"
     | "UnaryExpression"
@@ -25,8 +26,11 @@ export type NodeType =
     | "PipeExpression"
     | "ComposeExpression"
     | "CallExpression"
+    | "MethodCallExpression"
     | "MemberExpression"
     | "LambdaExpression"
+    | "LetExpression"
+    | "TupleLetExpression"
     | "NamedArgument"
     | "JoinDomain"
     | "Curve1DNode"
@@ -35,6 +39,8 @@ export type NodeType =
 
 export interface BaseNode {
     readonly type: NodeType;
+    readonly line?: number;
+    readonly column?: number;
     readonly startLoc?: number;
     readonly endLoc?: number;
 }
@@ -95,14 +101,15 @@ export interface VariableDeclaration extends BaseNode {
 export type TypeNode =
     | { readonly type: "TypeName"; readonly name: string }
     | { readonly type: "ListType"; readonly element: TypeNode }
+    | { readonly type: "TupleType"; readonly elements: Array<TypeNode> }
     | { readonly type: "NamedParameter"; readonly name: string; readonly parameter: TypeNode }
     | { readonly type: "FunctionType"; readonly paramName: string | null; readonly parameter: TypeNode; readonly returnType: TypeNode };
 
-/** `Component(solid:, expose:)` returns a component. `expose` publishes its anchors. */
+/** `Component(solid: coords => ..., expose: coords => { ... })` returns a component. */
 export interface ComponentExpression extends BaseNode {
     readonly type: "ComponentExpression";
     readonly solid: ExpressionNode;
-    readonly expose: ExposeBlock;
+    readonly expose: ExpressionNode;
 }
 
 export interface NamedArgumentDeclaration extends BaseNode {
@@ -134,19 +141,24 @@ export type ExpressionNode =
     | StringLiteral
     | VectorLiteral
     | ArrayLiteral
+    | TupleLiteral
     | ArrayMatchStatement
     | BinaryExpression
     | UnaryExpression
     | PipeExpression
     | ComposeExpression
     | CallExpression
+    | MethodCallExpression
     | MemberExpression
     | LambdaExpression
+    | LetExpression
+    | TupleLetExpression
     | JoinDomain
     | ComponentExpression
     | Curve1DNode
     | Surface2DNode
-    | Solid3DNode;
+    | Solid3DNode
+    | ExposeBlock;
 
 export interface Identifier extends BaseNode {
     readonly type: "Identifier";
@@ -176,6 +188,7 @@ export interface StringLiteral extends BaseNode {
 
 export interface VectorLiteral extends BaseNode {
     readonly type: "VectorLiteral";
+    readonly coords: ExpressionNode;
     readonly x: ExpressionNode;
     readonly y: ExpressionNode;
     readonly z: ExpressionNode;
@@ -185,6 +198,17 @@ export interface ArrayLiteral extends BaseNode {
     readonly type: "ArrayLiteral";
     readonly elements: Array<ExpressionNode>;
 }
+
+/** `(a, b)` is two values. A list would force them to share one type. */
+export interface TupleLiteral extends BaseNode {
+    readonly type: "TupleLiteral";
+    readonly elements: Array<ExpressionNode>;
+}
+
+/** A name or a nested tuple in `let (x, (y, z)) = pair in`. */
+export type LetPattern =
+    | { readonly type: "Name"; readonly name: Identifier }
+    | { readonly type: "Tuple"; readonly elements: Array<LetPattern>; readonly line?: number; readonly column?: number };
 
 /**
  * Type-safe array destructuring layout map.
@@ -228,9 +252,33 @@ export interface ComposeExpression extends BaseNode {
     readonly right: ExpressionNode;
 }
 
+/** `let name = value in body`. `name` is visible only in `body`. */
+export interface LetExpression extends BaseNode {
+    readonly type: "LetExpression";
+    readonly name: Identifier;
+    readonly value: ExpressionNode;
+    readonly body: ExpressionNode;
+}
+
+/** `let (x, y) = value in body`. Each name is visible only in `body`. */
+export interface TupleLetExpression extends BaseNode {
+    readonly type: "TupleLetExpression";
+    readonly pattern: LetPattern;
+    readonly value: ExpressionNode;
+    readonly body: ExpressionNode;
+}
+
 export interface CallExpression extends BaseNode {
     readonly type: "CallExpression";
     readonly callee: Identifier;
+    readonly arguments: Array<NamedArgument>;
+}
+
+/** `point.offset(x:, y:, z:)` and `point.add(vector:)`. The receiver is a vector. */
+export interface MethodCallExpression extends BaseNode {
+    readonly type: "MethodCallExpression";
+    readonly object: ExpressionNode;
+    readonly method: Identifier;
     readonly arguments: Array<NamedArgument>;
 }
 
@@ -253,13 +301,14 @@ export interface LambdaExpression extends BaseNode {
     readonly body: ExpressionNode;
 }
 
-/** A join seats two components. `combine` is `SeatedSolid3D => SeatedSolid3D => SeatedSolid3D`. */
+/** A join seats two components. The coordinate system is the last parameter and is ignored, so `join(...)` is `coords => solid`. */
 export interface JoinDomain extends BaseNode {
     readonly type: "JoinDomain";
     readonly frame: ExpressionNode;
     readonly placed: ExpressionNode;
     readonly using: ExpressionNode;
     readonly combine: ExpressionNode;
+    readonly coords?: ExpressionNode;
 }
 
 export interface Curve1DNode extends BaseNode {

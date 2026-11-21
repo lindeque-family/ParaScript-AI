@@ -3,50 +3,97 @@ setup {
     coordinate_system: "Z-up"
 }
 
-// 100 mm x 50 mm x 30 mm open box. The floor and the four walls are 3 mm thick.
-// The void starts on the floor and is as tall as the outer box, so it stands clear of the rim.
-// box returns that solid rectangle. corner is its minimum point.
-// align makes the planes parallel, slides the points together, then rotates in that plane.
-// origin is the point the renderer hangs the whole box on.
-def w = 100.0
-def d = 50.0
-def h = 30.0
-def wall = 3.0
+parameters {
+    width: 100.0,
+    depth: 50.0,
+    height: 30.0,
+    wall_thickness: 3.0
+}
 
-def Box = width => depth => height => Component(
-    solid: Solid3D(faces: [
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(x: u, y: v, z: 0.0)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(x: u, y: v, z: height)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u, y: 0.0, z: v)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: u, y: depth, z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: 0.0, y: u, z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(x: width, y: u, z: v))
-    ]),
-    expose: {
-        up: Vector(x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(x: 1.0, y: 0.0, z: 0.0),
-        corner: Vector(x: 0.0, y: 0.0, z: 0.0)
-    }
-)
+def Box = width => depth => height =>
+    Component(
+        solid: coords =>
+            let top = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
+            let bottom = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
+            let front = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
+            let back = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
+            let left = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: 0, y: u, z: v)) in
+            let right = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
+            Solid3D(faces: [
+                top,
+                bottom,
+                front,
+                back,
+                left,
+                right
+            ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    )
 
-def inner_w = w - (wall * 2.0)
-def inner_d = d - (wall * 2.0)
-def inner_h = h
-
-def HollowBox = Component(
-    solid: join(
-        frame: Box(width: w, depth: d, height: h),
-        placed: Box(width: inner_w, depth: inner_d, height: inner_h),
-        using: frame => placed => align(
-            planar: meet(frame: frame.up, placed: placed.up),
-            translation: meet(frame: frame.corner + Vector(x: wall, y: wall, z: wall), placed: placed.corner),
-            rotation: meet(frame: frame.right, placed: placed.right)
+def HollowBox = 
+    let box = Box(
+        width: $width,
+        depth: $depth,
+        height: $height) in 
+    let cutout = Box(
+        width: $width - 2.0*$wall_thickness,
+        depth: $depth - 2.0*$wall_thickness,
+        height: $height - $wall_thickness) in 
+    Component(
+        solid: join(
+            frame: box,
+            placed: cutout,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.corner.offset(
+                        x: $wall_thickness,
+                        y: $wall_thickness,
+                        z: $wall_thickness),
+                    placed: placed.corner),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame - placed
         ),
-        combine: frame => placed => frame - placed
-    ),
-    expose: {
-        origin: Vector(x: w / 2.0, y: d / 2.0, z: h / 2.0)
-    }
-)
+        expose: coords => {
+            origin: Vector(
+                coords: coords,
+                x: $width / 2.0,
+                y: $depth / 2.0,
+                z: $height / 2.0)
+        }
+    )
 
 export(HollowBox)
