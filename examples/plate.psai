@@ -14,17 +14,45 @@ parameters {
         radius: 3.0,
         count_width: 5.0,
         count_depth: 3.0,
-        margin: 5.0
+        margin: 25.0
     },
     pins: {
         radius: 3.0,
-        height: 12.0,
-        count: 7.0
+        count: 7.0,
+        ring: 40.0,
+        bite: 1.0
     }
 }
 
 // pi is a value the whole script shares.
 def pi = 3.14159265359
+
+def fold: (item: T => accumulator: A => A) => (initial: A) => (list: [T]) => A = f => initial => list => match list {
+    [] => initial,
+    head :: tail => f(item: head, accumulator: fold(f: f, initial: initial, list: tail))
+}
+
+def vector_grid = start_u => end_u => count_u => start_v => end_v => count_v => point =>
+    let grid = u_count => v_count =>
+        let us = integers(start: 0.0, count: u_count) in
+        let vs = integers(start: 0.0, count: v_count) in
+        let row_onto = v => points => fold(
+            f: item => accumulator => (item, v) :: accumulator,
+            initial: points,
+            list: us
+        ) in
+        fold(
+            f: item => accumulator => row_onto(v: item, points: accumulator),
+            initial: [],
+            list: vs
+        ) in
+    let step_u = (end_u - start_u) / (count_u - 1.0) in
+    let step_v = (end_v - start_v) / (count_v - 1.0) in
+    grid(u_count: count_u, v_count: count_v)
+    |> map(f: item => let (u, v) = item in point(
+        u: start_u + (u * step_u),
+        v: start_v + (v * step_v)
+    ))
 
 def Box = width => depth => height =>
     Component(
@@ -111,9 +139,59 @@ def Cylinder = radius => height =>
         }
     )
 
-export(Cylinder(radius: 10, height: 10))
+def place_components = host => points => place => combine => fold(
+    f: item => accumulator => Component(
+        solid: join(
+            frame: accumulator,
+            placed: place,
+            using: frame => placed => align(
+                planar: meet(frame: accumulator.up, placed: placed.up),
+                translation: meet(frame: accumulator.corner.add(vector: item), placed: placed.bottom),
+                rotation: meet(frame: accumulator.right, placed: placed.right)
+            ),
+            combine: combine
+        ),
+        expose: coords => { up: accumulator.up, right: accumulator.right, corner: accumulator.corner }
+    ),
+    initial: host,
+    list: points
+)
 
-//// A square box. size is the width and the depth.
-//def Plate = Box(width: $plate.size, depth: $plate.size, height: $plate.thickness)
-//
-//export(Plate)
+// A square box. size is the width and the depth.
+def Plate = Box(width: $plate.size, depth: $plate.size, height: $plate.thickness)
+
+def circular_pattern = coords => count => radius =>
+    integers(start: 0.0, count: count)
+    |> map(f: item => Vector(coords: coords,
+        x: ($plate.size / 2.0) + (radius * cos(rad: item * (2.0 * pi / count))),
+        y: ($plate.size / 2.0) + (radius * sin(rad: item * (2.0 * pi / count))),
+        z: $plate.thickness - $pins.bite
+    ))
+
+def PlateWithHoles = coords => place_components(
+    host: Plate,
+    points: vector_grid(
+        start_u: $holes.margin + $holes.radius,
+        end_u: $plate.size - $holes.margin - $holes.radius,
+        count_u: $holes.count_width,
+        start_v: $holes.margin + $holes.radius,
+        end_v: $plate.size - $holes.margin - $holes.radius,
+        count_v: $holes.count_depth,
+        point: u=>v=>Vector(coords: coords, x: u, y: v, z: 0.0)),
+    place: Cylinder(radius: $holes.radius, height: $plate.thickness),
+    combine: frame => placed => frame - placed
+)
+
+def PlateWithKnobs = coords => place_components(
+    host: PlateWithHoles(coords: coords),
+    points: circular_pattern(coords: coords, count: $pins.count, radius: $pins.ring),
+    place: Cylinder(radius: $pins.radius, height: $plate.thickness + $pins.bite),
+    combine: frame => placed => frame + placed
+)
+
+export(Component(
+    solid: coords => PlateWithKnobs(coords: coords)
+    expose: coords => {
+        origin: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+    }
+))

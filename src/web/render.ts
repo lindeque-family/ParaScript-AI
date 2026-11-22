@@ -46,6 +46,7 @@ const EDGE_DEPTH_BIAS = 0.45;
 export class ManifoldViewport {
     private readonly ctx: CanvasRenderingContext2D;
     private mesh: Mesh = { positions: new Float32Array(), indices: new Uint32Array() };
+    private coveredEdges: ReadonlySet<string> = new Set();
     private angleX = 0.6;
     private angleY = 0.7;
     private dragging = false;
@@ -223,6 +224,7 @@ export class ManifoldViewport {
 
     setMesh(mesh: Mesh): void {
         this.mesh = mesh;
+        this.coveredEdges = coveredFaceEdges(mesh);
         this.radius = this.measureRadius();
         this.resize();
     }
@@ -831,12 +833,14 @@ export class ManifoldViewport {
             bx: number;
             by: number;
             bz: number;
+            key: string;
         }
         const edges = new Map<string, Edge>();
         const add = (p: MeshCorner, q: MeshCorner, tri: ScreenTriangle): void => {
-            const found = edges.get(edgeKey(p, q));
+            const key = edgeKey(p, q);
+            const found = edges.get(key);
             if (!found) {
-                edges.set(edgeKey(p, q), {
+                edges.set(key, {
                     count: 1,
                     crease: false,
                     silhouette: false,
@@ -849,7 +853,8 @@ export class ManifoldViewport {
                     az: p.depth,
                     bx: q.sx,
                     by: q.sy,
-                    bz: q.depth
+                    bz: q.depth,
+                    key
                 });
                 return;
             }
@@ -873,6 +878,9 @@ export class ManifoldViewport {
         ctx.lineJoin = "round";
         for (const edge of edges.values()) {
             if (edge.count !== 1 && !edge.crease && !edge.silhouette) continue;
+            // A boolean leaves the cylinder's end disk in the plate face. Those edges were
+            // marked when the mesh was set, so orbiting does not search the faces again.
+            if (edge.count === 1 && !edge.crease && !edge.silhouette && this.coveredEdges.has(edge.key)) continue;
             const span = Math.hypot(edge.bx - edge.ax, edge.by - edge.ay);
             if (span < this.pixelRatio) continue;
             const steps = Math.max(1, Math.ceil(span));
@@ -979,7 +987,122 @@ function frameLight(right: Vec3, forward: Vec3, up: Vec3, rightScale: number, fo
     });
 }
 
-function pointKey(point: MeshCorner): string {
+function coveredFaceEdges(mesh: Mesh): Set<string> {
+    const { positions, indices } = mesh;
+    interface Face {
+        a: Vec3;
+        b: Vec3;
+        c: Vec3;
+        bucket: string;
+        ka: string;
+        kb: string;
+        kc: string;
+    }
+    const faces: Face[] = [];
+    const buckets = new Map<string, number[]>();
+    for (let index = 0; index < indices.length; index += 3) {
+        const ia = indices[index];
+        const ib = indices[index + 1];
+        const ic = indices[index + 2];
+        if (ia === undefined || ib === undefined || ic === undefined) continue;
+        const a = vertexAt(positions, ia);
+        const b = vertexAt(positions, ib);
+        const c = vertexAt(positions, ic);
+        const normal = faceNormal(a, b, c);
+        if (!normal) continue;
+        const bucket = normalKey(normal);
+        const face: Face = { a, b, c, bucket, ka: pointKey(a), kb: pointKey(b), kc: pointKey(c) };
+        const list = buckets.get(bucket);
+        if (list) list.push(faces.length);
+        else buckets.set(bucket, [faces.length]);
+        faces.push(face);
+    }
+    interface OpenEdge {
+        count: number;
+        a: Vec3;
+        b: Vec3;
+        bucket: string;
+        left: string;
+        right: string;
+    }
+    const edges = new Map<string, OpenEdge>();
+    const remember = (face: Face, ka: string, a: Vec3, kb: string, b: Vec3): void => {
+        const key = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+        const found = edges.get(key);
+        if (found) found.count += 1;
+        else edges.set(key, { count: 1, a, b, bucket: face.bucket, left: ka, right: kb });
+    };
+    for (const face of faces) {
+        remember(face, face.ka, face.a, face.kb, face.b);
+        remember(face, face.kb, face.b, face.kc, face.c);
+        remember(face, face.kc, face.c, face.ka, face.a);
+    }
+    const covered = new Set<string>();
+    for (const [key, edge] of edges) {
+        if (edge.count !== 1) continue;
+        const candidates = buckets.get(edge.bucket) ?? [];
+        const opposite = buckets.get(oppositeNormalKey(edge.bucket));
+        const list = opposite === undefined ? candidates : candidates.concat(opposite);
+        for (const index of list) {
+            const face = faces[index];
+            if (!face) continue;
+            if (ownsEdge(edge.left, edge.right, face.ka, face.kb)) continue;
+            if (ownsEdge(edge.left, edge.right, face.kb, face.kc)) continue;
+            if (ownsEdge(edge.left, edge.right, face.kc, face.ka)) continue;
+            if (pointOnTriangle(edge.a, face.a, face.b, face.c) && pointOnTriangle(edge.b, face.a, face.b, face.c)) {
+                covered.add(key);
+                break;
+            }
+        }
+    }
+    return covered;
+}
+
+function vertexAt(positions: Float32Array, index: number): Vec3 {
+    return {
+        x: positions[index * 3] ?? 0,
+        y: positions[index * 3 + 1] ?? 0,
+        z: positions[index * 3 + 2] ?? 0
+    };
+}
+
+function faceNormal(a: Vec3, b: Vec3, c: Vec3): Vec3 | undefined {
+    const n = crossVec(
+        { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z },
+        { x: c.x - a.x, y: c.y - a.y, z: c.z - a.z }
+    );
+    const length = Math.hypot(n.x, n.y, n.z);
+    if (length < 1e-8) return undefined;
+    return quantizeNormal({ x: n.x / length, y: n.y / length, z: n.z / length });
+}
+
+function normalKey(normal: Vec3): string {
+    return `${Math.round(normal.x * 48)},${Math.round(normal.y * 48)},${Math.round(normal.z * 48)}`;
+}
+
+function oppositeNormalKey(key: string): string {
+    return key.split(",").map((part) => String(-Number(part))).join(",");
+}
+
+function ownsEdge(left: string, right: string, ka: string, kb: string): boolean {
+    return left === ka && right === kb || left === kb && right === ka;
+}
+
+function pointOnTriangle(point: Vec3, a: Vec3, b: Vec3, c: Vec3): boolean {
+    const ab = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };
+    const ac = { x: c.x - a.x, y: c.y - a.y, z: c.z - a.z };
+    const ap = { x: point.x - a.x, y: point.y - a.y, z: point.z - a.z };
+    const n = crossVec(ab, ac);
+    const area2 = dotVec(n, n);
+    if (area2 < 1e-10) return false;
+    if (Math.abs(dotVec(ap, n)) / Math.sqrt(area2) > 0.05) return false;
+    const wB = dotVec(crossVec(ap, ac), n) / area2;
+    const wC = dotVec(crossVec(ab, ap), n) / area2;
+    const wA = 1 - wB - wC;
+    return wA >= -0.02 && wB >= -0.02 && wC >= -0.02;
+}
+
+function pointKey(point: { x: number; y: number; z: number }): string {
     // 0.05 units welds a BSP crack. A 3 mm wall and an 8 mm facet step stay apart.
     const scale = 20;
     return `${Math.round(point.x * scale)},${Math.round(point.y * scale)},${Math.round(point.z * scale)}`;

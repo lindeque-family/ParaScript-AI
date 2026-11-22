@@ -340,12 +340,22 @@ export class TypeInferenceEngine {
                 const combineType = node.combine.type === "LambdaExpression"
                     ? this.inferLambdaAgainst(node.combine, combineExpected, env)
                     : this.inferExpression(node.combine, env);
-                if (prune(combineType).tag !== "Function") {
+                const combineSeen = prune(combineType);
+                // A parameter is still unknown here. Record the seated operation so the
+                // caller's lambda is checked with frame and placed as seated solids.
+                if (combineSeen.tag === "Variable") {
+                    this.unifyAt(combineType, {
+                        tag: "Function", paramName: "frame", parameter: tSeatedSolid3D, returnType: {
+                            tag: "Function", paramName: "placed", parameter: tSeatedSolid3D, returnType: tSeatedSolid3D
+                        }
+                    }, node.combine);
+                } else if (combineSeen.tag !== "Function") {
                     throw this.typeError(node.combine, "combine is frame => placed => SeatedSolid3D.");
-                }
-                this.unifyAt(combineType, combineExpected, node.combine);
-                if (prune(resultVar).tag !== "SeatedSolid3D") {
-                    throw this.typeError(node.combine, "combine is frame => placed => SeatedSolid3D.");
+                } else {
+                    this.unifyAt(combineType, combineExpected, node.combine);
+                    if (prune(resultVar).tag !== "SeatedSolid3D") {
+                        throw this.typeError(node.combine, "combine is frame => placed => SeatedSolid3D.");
+                    }
                 }
                 if (node.coords) {
                     const coordsType = prune(this.inferExpression(node.coords, env));

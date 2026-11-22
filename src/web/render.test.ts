@@ -527,6 +527,16 @@ test("solid shading keeps every side and separates adjacent faces", () => {
     assert.ok(coverage(log).spread < 80);
     assert.equal(countColor(log, SHAPE_EDGE), 4);
 
+    log.segments.length = 0;
+    viewport.setMesh({
+        positions: new Float32Array([
+            0, 0, 0, 4, 0, 0, 0, 4, 0,
+            1, 1, 0, 3, 1, 0, 2, 1.05, 0
+        ]),
+        indices: new Uint32Array([0, 1, 2, 3, 4, 5])
+    });
+    assert.equal(countColor(log, SHAPE_EDGE), 3);
+
     viewport.setUpAxis("Y-up");
     viewport.setMesh({
         positions: new Float32Array([0, 0, 0, 0, 0, 1, 1, 0, 0]),

@@ -525,6 +525,40 @@ test("Geometric operators exist only inside their join", () => {
     assert.throws(() => {
         inferSourceEnvironment(numberResult);
     }, /Type Inference Error: combine is frame => placed => SeatedSolid3D/);
+
+    const passed = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        ${block}
+        ${mate}
+        def place = host => placed => combine => join(
+            frame: host,
+            placed: placed,
+            using: frame => placed => mate,
+            combine: combine
+        )
+        def kept = place(host: Block, placed: Block, combine: frame => placed => frame + placed)
+        def cut = place(host: Block, placed: Block, combine: frame => placed => frame - placed)
+    `;
+    const passedEnv = inferSourceEnvironment(passed);
+    assertPartialJoin(prune(passedEnv.lookup("kept").type));
+    assertPartialJoin(prune(passedEnv.lookup("cut").type));
+
+    const namedOutside = `
+        setup { units: "mm", coordinate_system: "Z-up" }
+        ${block}
+        ${mate}
+        def place = host => placed => combine => join(
+            frame: host,
+            placed: placed,
+            using: frame => placed => mate,
+            combine: combine
+        )
+        def keep = frame => placed => frame + placed
+        def kept = place(host: Block, placed: Block, combine: keep)
+    `;
+    assert.throws(() => {
+        inferSourceEnvironment(namedOutside);
+    }, /Type Inference Error: Structural Unification Mismatch. Cannot resolve type structure 'SeatedSolid3D' with target contract type 'Float'/);
 });
 
 test("A join seats parts by the anchors they expose", () => {
