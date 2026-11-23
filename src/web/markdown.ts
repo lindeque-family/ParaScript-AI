@@ -193,6 +193,7 @@ export function renderLanguagePage(markdown: string): string {
 <a class="brand" href="/">ParaScript</a>
 <nav>
 <a href="/workspace">Workspace</a>
+<a href="/prompt">Prompt</a>
 <a href="#reference">Reference</a>
 <a href="/language.md">For models</a>
 </nav>
@@ -225,6 +226,73 @@ export function renderLanguagePage(markdown: string): string {
 <article id="reference" class="reference">
 ${shiftHeadings(renderMarkdown(markdown))}
 </article>
+</body>
+</html>
+`;
+}
+
+/** The text a person pastes into a language model so it writes ParaScript. */
+export function modelPrompt(reference: string): string {
+    return [
+        "ParaScript is the language you use to describe one closed solid. A face is a formula: two numbers in, one point out. A part is a function of its sizes. A join seats one part on another by the anchors they share, then keeps both solids or cuts one away. You write the faces and export one component. The workspace compiles that script and draws the solid. That is what the language is for: a description a compiler can build, with a facing and a place for every surface.",
+        "",
+        "A person will describe the solid they want. Reply with one complete script and no surrounding explanation. They will paste that script into the ParaScript workspace and press Run solver.",
+        "",
+        "Use only the forms in the reference below. The reference is included here in full. Copy the smallest example that already does what is asked, and change its parameters. The plate is the form for a grid or a circle of features. The screw is the form when a measurement comes from a standard. The broom is the form when one shape is seated several times.",
+        "",
+        reference.trimEnd(),
+        ""
+    ].join("\n");
+}
+
+/** The page that shows that prompt, ready to copy. */
+export function renderPromptPage(prompt: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ParaScript prompt</title>
+<meta name="description" content="Copy this prompt into a language model. It says what ParaScript is for and how to write one closed solid. Paste the script it returns into the workspace.">
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<header class="site">
+<a class="brand" href="/">ParaScript</a>
+<nav>
+<a href="/language">Language</a>
+<a href="/workspace">Workspace</a>
+</nav>
+</header>
+<main class="home">
+<p class="eyebrow">For your model</p>
+<h1>A prompt for your AI.</h1>
+<p class="lede">Copy this into your language model. It says what ParaScript is for and how to write a solid in it. Then describe the solid you want. Paste the script it returns into the workspace and press Run solver.</p>
+<p class="actions">
+<button class="primary" id="copy-prompt" type="button">Copy prompt</button>
+<a class="secondary" href="/workspace">Open the workspace</a>
+</p>
+<textarea id="model-prompt" class="model-prompt" readonly spellcheck="false">${escapeHtml(prompt)}</textarea>
+</main>
+<script>
+const copyPrompt = document.getElementById("copy-prompt");
+const modelPromptField = document.getElementById("model-prompt");
+copyPrompt.addEventListener("click", () => {
+    const text = modelPromptField.value;
+    const done = () => {
+        copyPrompt.textContent = "Copied";
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, () => {
+            modelPromptField.focus();
+            modelPromptField.select();
+        });
+        return;
+    }
+    modelPromptField.focus();
+    modelPromptField.select();
+});
+</script>
 </body>
 </html>
 `;

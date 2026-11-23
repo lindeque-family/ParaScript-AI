@@ -3,43 +3,56 @@ setup {
     coordinate_system: "Z-up"
 }
 
-// M3x16 hexagon-head screw. The head is the ISO 4017 hexagon: 5.5 mm across
-// flats and 2 mm thick, with a vertex on the Y axis. The shank is an ISO 68-1
-// M3 coarse thread: 60 degrees, pitch 0.5 mm, major diameter 3 mm, minor
-// diameter 2.459 mm. The head sits on z = 0 and the tip is at z = -16.
+// M3x16 hexagon-head screw. A measurement from a standard sits in the group
+// named for that standard. The head is an ISO 4017 hexagon with a vertex on
+// the Y axis. The shank follows the ISO 68-1 M3 coarse basic profile:
+// 60 degrees, major diameter 3 mm, minor diameter 2.459 mm.
+// The head sits on z = 0 and the tip is one length below it.
 // Each turn is its own face. One face for the whole shank would be sampled
-// too coarsely to show a 0.5 mm pitch.
-def pi = 3.14159265359
-def pitch = 0.5
-def length = 16.0
-def tip = 0.0 - length
-def across_flats = 5.5
-def head_height = 2.0
-def flat = across_flats / 2.0
-def corner = flat / cos(rad: pi / 6.0)
-// The shank is closed just inside the head so the hex underside can be a solid face.
-def bury = 0.05
+// too coarsely to show the pitch.
+parameters {
+    head: {
+        iso_4017: {
+            across_flats: 5.5,
+            height: 2.0,
+            length: 16.0
+        },
+        flat: iso_4017.across_flats / 2.0,
+        // Distance from the axis to a vertex. The angle is pi / 6, with the pi bound below.
+        corner: flat / cos(rad: 3.14159265359 / 6.0)
+    },
+    thread: {
+        iso_68_1: {
+            pitch: 0.5
+        },
+        tip: 0.0 - $head.iso_4017.length,
+        // Closure of the shank inside the head, so the hex underside stays a solid face.
+        bury: 0.05,
+        // Cosine series of the ISO 68-1 external basic profile.
+        // Phase 0 is the crest. The series stays within 0.01 mm of that profile.
+        c0: 1.347769,
+        c1: 0.143114,
+        c2: 0.015512,
+        c3: 0.0 - 0.003163,
+        c4: 0.005484,
+        c5: 0.0 - 0.003825
+    }
+}
 
-// Cosine series of the ISO 68-1 external basic profile.
-// Phase 0 is the crest. The truncated series stays within 0.01 mm of that profile.
-def c0 = 1.347769
-def c1 = 0.143114
-def c2 = 0.015512
-def c3 = 0.0 - 0.003163
-def c4 = 0.005484
-def c5 = 0.0 - 0.003825
+// pi is a value the whole script shares.
+def pi = 3.14159265359
 
 // Radius at a seam, where the helical phase collapses to the angle around the shank.
-def end_radius = u => c0 + c1 * cos(rad: u) + c2 * cos(rad: 2.0 * u) + c3 * cos(rad: 3.0 * u) + c4 * cos(rad: 4.0 * u) + c5 * cos(rad: 5.0 * u)
+def end_radius = u => $thread.c0 + $thread.c1 * cos(rad: u) + $thread.c2 * cos(rad: 2.0 * u) + $thread.c3 * cos(rad: 3.0 * u) + $thread.c4 * cos(rad: 4.0 * u) + $thread.c5 * cos(rad: 5.0 * u)
 
 // One pitch of the helix. Clockwise in u so the wall faces outward.
 def wall = coords => index => Surface2D(
     max_u: 2.0 * pi,
-    min_v: u => tip + index * pitch,
-    max_v: u => tip + index * pitch + pitch,
+    min_v: u => $thread.tip + index * $thread.iso_68_1.pitch,
+    max_v: u => $thread.tip + index * $thread.iso_68_1.pitch + $thread.iso_68_1.pitch,
     formula: u => v => Vector(coords: coords, 
-        x: (c0 + c1 * cos(rad: 1.0 * (2.0 * pi * v / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * v / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * v / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * v / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * v / pitch - u))) * cos(rad: u),
-        y: (c0 + c1 * cos(rad: 1.0 * (2.0 * pi * v / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * v / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * v / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * v / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * v / pitch - u))) * (0.0 - sin(rad: u)),
+        x: ($thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u))) * cos(rad: u),
+        y: ($thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u))) * (0.0 - sin(rad: u)),
         z: v
     )
 )
@@ -50,17 +63,17 @@ def tip_cap = coords => Surface2D(
     formula: u => v => Vector(coords: coords, 
         x: v * cos(rad: u),
         y: v * (0.0 - sin(rad: u)),
-        z: tip
+        z: $thread.tip
     )
 )
 
 // Short collar and cap buried in the head. They close the shank without showing.
 def collar = coords => Surface2D(
     max_u: 2.0 * pi,
-    min_v: u => 0.0, max_v: u => bury,
+    min_v: u => 0.0, max_v: u => $thread.bury,
     formula: u => v => Vector(coords: coords, 
-        x: (c0 + c1 * cos(rad: 1.0 * (2.0 * pi * v / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * v / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * v / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * v / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * v / pitch - u))) * cos(rad: u),
-        y: (c0 + c1 * cos(rad: 1.0 * (2.0 * pi * v / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * v / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * v / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * v / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * v / pitch - u))) * (0.0 - sin(rad: u)),
+        x: ($thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u))) * cos(rad: u),
+        y: ($thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u))) * (0.0 - sin(rad: u)),
         z: v
     )
 )
@@ -68,11 +81,11 @@ def collar = coords => Surface2D(
 def shank_cap = coords => Surface2D(
     max_u: 2.0 * pi,
     min_v: u => 0.0,
-    max_v: u => c0 + c1 * cos(rad: 1.0 * (2.0 * pi * bury / pitch - u)) + c2 * cos(rad: 2.0 * (2.0 * pi * bury / pitch - u)) + c3 * cos(rad: 3.0 * (2.0 * pi * bury / pitch - u)) + c4 * cos(rad: 4.0 * (2.0 * pi * bury / pitch - u)) + c5 * cos(rad: 5.0 * (2.0 * pi * bury / pitch - u)),
+    max_v: u => $thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)),
     formula: u => v => Vector(coords: coords, 
         x: v * cos(rad: u),
         y: v * sin(rad: u),
-        z: bury
+        z: $thread.bury
     )
 )
 
@@ -80,10 +93,10 @@ def shank_cap = coords => Surface2D(
 // u runs from the higher-angle vertex back to this one so the flat faces outward.
 def side = coords => index => Surface2D(
     max_u: 1.0,
-    min_v: u => 0.0, max_v: u => head_height,
+    min_v: u => 0.0, max_v: u => $head.iso_4017.height,
     formula: u => v => Vector(coords: coords, 
-        x: (1.0 - u) * corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + u * corner * cos(rad: index * pi / 3.0 + pi / 6.0),
-        y: (1.0 - u) * corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + u * corner * sin(rad: index * pi / 3.0 + pi / 6.0),
+        x: (1.0 - u) * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + u * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0),
+        y: (1.0 - u) * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + u * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0),
         z: v
     )
 )
@@ -92,9 +105,9 @@ def head_top = coords => index => Surface2D(
     max_u: 1.0,
     min_v: u => 0.0, max_v: u => 1.0,
     formula: u => v => Vector(coords: coords, 
-        x: u * ((1.0 - v) * corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + v * corner * cos(rad: index * pi / 3.0 + pi / 6.0)),
-        y: u * ((1.0 - v) * corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + v * corner * sin(rad: index * pi / 3.0 + pi / 6.0)),
-        z: head_height
+        x: u * ((1.0 - v) * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + v * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0)),
+        y: u * ((1.0 - v) * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + v * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0)),
+        z: $head.iso_4017.height
     )
 )
 
@@ -102,8 +115,8 @@ def head_bottom = coords => index => Surface2D(
     max_u: 1.0,
     min_v: u => 0.0, max_v: u => 1.0,
     formula: u => v => Vector(coords: coords, 
-        x: u * ((1.0 - v) * corner * cos(rad: index * pi / 3.0 + pi / 6.0) + v * corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0)),
-        y: u * ((1.0 - v) * corner * sin(rad: index * pi / 3.0 + pi / 6.0) + v * corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0)),
+        x: u * ((1.0 - v) * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0) + v * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0)),
+        y: u * ((1.0 - v) * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0) + v * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0)),
         z: 0.0
     )
 )

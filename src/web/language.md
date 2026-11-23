@@ -8,15 +8,17 @@ The language is functional. A face, a part, and an assembly are functions of the
 
 ## Guidance for a language model
 
+The complete scripts below are the examples. Copy the smallest one that already does the thing you need, and change its parameters. The plate is the form to copy for a grid of features and a circle of features. The screw is the form to copy when a measurement comes from a standard. The broom is the form to copy when one shape is seated several times by `join`.
+
 Build the model in this order.
 
-1. Bind `pi` when a curve needs it: `def pi = 3.14159265359`. A top-level number is for a value the whole script shares. A part's size is a parameter of that part. The patterned plate is the form to copy. The broom's sizes live in `parameters`, one group per part, and are read with `$handle.radius`. `Cylinder` still receives `radius` and `height` at the call.
-2. Name each face for the surface it is. A face is a 2D surface. A cylinder is one `Tube` and two `Disk` calls. `Tube` is the round wall. `Disk` is a cap. `Cylinder` calls them from `solid: coords =>`: `Tube(coords: coords, radius: radius, height: height)`, `Disk(coords: coords, radius: radius, z: 0.0)`, and `Disk(coords: coords, radius: radius, z: height)`. The face list is how the solid is composed. A vector is `Vector(coords: coords, x:, y:, z:)`. `Component` passes one coordinate system into `solid: coords =>` and `expose: coords =>`. A script cannot construct that value. A helper defined outside those callbacks takes `coords` and the call passes it. `join`'s last parameter is that coordinate system, and `join` ignores the value, so a component passes `solid: join(...)`. A component does not expose that system. A direction a mate needs is an anchor on the part. Inside `using`, move a point with `frame.top.offset(x:, y:, z:)`. That result keeps the point's coordinate system. Two existing vectors combine with `add(vector:)` or `subtract(vector:)`, and both must carry that one system.
-3. Write the base part next, also as a function of its sizes. A plate is a square box, so `Plate` calls `Box(width: size, depth: size, height: thickness)`. `Box` is the rectangular solid, centered on X and Y and standing on z = 0. Expose the anchors a pattern will read. A plate exposes `up`, `right`, `origin`, and `top`. `origin` is the center, and it is the point the viewer hangs the model on. `top` is the center of the top face.
-4. A function that is not a component uses `snake_case`, and the name says what it returns. `rectangular_pattern` returns the grid of points. Its parameters are `column_count`, `row_count`, `column_pitch`, `row_pitch`, `columns`, and `rows`. `circular_pattern` returns the points of a circle. Its parameters are `point_count`, `radius`, and `indexes`. `column`, `row`, and each index count from `0`. A component uses `PascalCase`.
-5. Map a cylinder function over that grid. The function receives the point, and it chooses `radius` and `height`, so each location can build a different cylinder. `CylinderAt` is that cylinder. It publishes `at`, the point it was built for.
-6. Subtract those cylinders from the plate with `subtract_cylinders`. Add the pin cylinders with `add_cylinders`. One `join` cuts or adds one cylinder. The seat reads `plate.origin` or `plate.top`, and `placed.at`. The plate passed in exposes every anchor the function reads.
-7. Write the numbers once, in `parameters`, grouped by the part they describe. Read a parameter with `$`, as in `$holes` and `$plate.size`. `plate.origin` is an anchor on the solid. Bind `def patterned_plate = cut_holes >> add_pins`, then export `patterned_plate(plate: Plate(size: $plate.size, thickness: $plate.thickness))`.
+1. Put the model's parameters in the `parameters` section, immediately after `setup`. A size, a count, and a position are fields there, grouped by the part they describe. When a measurement comes from a standard, put that field in a group named for the standard, as the screw does with `iso_4017` and `iso_68_1`. Read a field with `$`, as in `$plate.size` and `$holes.radius`. A later field in a group may use an earlier field by its short name. Bind `pi` when a curve needs it: `def pi = 3.14159265359`. A top-level number is for a value the whole script shares, such as `pi`. The broom's sizes live in that section, one group per part, and are read with `$handle.radius`. `Cylinder` still receives `radius` and `height` at the call.
+2. Name each face for the surface it is. A face is a 2D surface. A cylinder is one `Tube` and two `Disk` calls, named with `let` inside `Cylinder`, as the plate and the broom do. `Tube` is the round wall. `Disk` is a cap. `Cylinder` calls them from `solid: coords =>`: `Tube(coords: coords, radius: radius, height: height)`, `Disk(coords: coords, radius: radius, z: 0.0)`, and `Disk(coords: coords, radius: radius, z: height)`. A box is six faces in `Box`, standing on z = 0, with `corner` at the minimum point. A vector is `Vector(coords: coords, x:, y:, z:)`. `Component` passes one coordinate system into `solid: coords =>` and `expose: coords =>`. A script cannot construct that value. A helper defined outside those callbacks takes `coords` and the call passes it. `join`'s last parameter is that coordinate system, and `join` ignores the value, so a component passes `solid: join(...)`. A component does not expose that system. A direction a mate needs is an anchor on the part. Inside `using`, move a point with `offset(x:, y:, z:)` and combine two vectors with `add(vector:)` or `subtract(vector:)`.
+3. Write a shape once, as a function of the sizes that change, and call it. `Box(width:, depth:, height:)` and `Cylinder(radius:, height:)` are those functions. The plate is `Box(width: $plate.size, depth: $plate.size, height: $plate.thickness)`. The host exposes `up`, `right`, and `corner`. A part that will be seated exposes `up`, `right`, and `bottom`. The exported component exposes `origin`, the point the viewer hangs the model on.
+4. A function that is not a component uses `snake_case`, and the name says what it returns. `vector_grid` returns the points of a grid. `circular_pattern` returns the points of a circle. `place_components` seats one component at each of those points. A component uses `PascalCase`, such as `Plate`, `Box`, and `Cylinder`.
+5. Seat repeated parts with `place_components`, as the plate and the remote do. It folds the point list, and each step is one `join`. The point is added to the host's `corner` and meets the placed part's `bottom`. Pass `combine` at the call. `combine: frame => placed => frame - placed` cuts the placed solid away. `combine: frame => placed => frame + placed` keeps both. The lambda is written at the call, and its parameters are named `frame` and `placed`.
+6. `integers(start:, count:)` builds the whole numbers a grid or a circle needs. `map` walks a list, and its parameter is named `item`. `|>` fills the next argument, so a list can be piped into `map`. A list has no length. `fold` on the plate is a right fold the script defines. The language does not provide `fold`.
+7. Export one component. The plate exports `Component(solid: coords => PlateWithKnobs(coords: coords), expose: coords => { origin: ... })`. The broom exports the finished `Broom`. A `join` returns a solid without anchors, so wrap it in `Component` and publish the anchors the next mate reads.
 
 `value |> fn` fills `fn`'s next argument. `items |> map(f: item => ...)` is `map(f: ..., list: items)`. `items |> map` is rejected, because `map` is still waiting for `f`. `f >> g` composes two functions and runs `f` first. Both functions must already be waiting for one value. `>>` binds more tightly than `|>`.
 
@@ -26,21 +28,19 @@ A call is a name and its arguments. Bind `def adjust = shift(d: 3.0) >> scale(k:
 
 `join`'s last parameter is the coordinate system, and `join` ignores it, so `join(...)` is already a function of that system. Pass the call as `solid`: `Component(solid: join(...), expose: coords => { up: plate.up, right: plate.right, origin: plate.origin, top: plate.top })`. The `solid` argument is that `join`, or `coords =>` a solid or a component. A bare parameter that is not yet a solid or a component is rejected. A component does not expose that system, so `frame.coords` does not typecheck. A script has one coordinate system, so `plate.origin.add(vector: placed.at)` is legal. `setup`'s `coordinate_system` string tells the viewer which axis is up. The `using` parameters are named `frame` and `placed`, in that order. Inside `combine`, `frame - placed` cuts the placed solid away and `frame + placed` keeps both, and `coords` is not visible there. Seat one feature per `join`, then join the next feature onto that result. A `Solid3D` is one closed body.
 
-A `def` is a top-level binding. A reusable function takes what it needs as parameters. `rectangular_pattern`, `CylinderAt`, and `subtract_cylinders` do. `cut_holes` and `add_pins` read the file's `parameters` groups. Inside a function, `let name = expression in expression` names a value for the expression after `in`. `Cylinder` binds its two caps that way.
+A `def` is a top-level binding. A reusable function takes what it needs as arguments at the call. The model's parameters belong in the `parameters` section. `vector_grid`, `circular_pattern`, and `place_components` take arguments. `PlateWithHoles` reads `$holes` and `PlateWithKnobs` reads `$pins`. Inside a function, `let name = expression in expression` names a value for the expression after `in`. `Cylinder` binds its two caps that way.
 
 ## Lessons
 
-The patterned plate is the script that follows these lessons. Copy that script for a grid of features on a part.
+The examples below are the scripts that follow these lessons. Copy the plate for a grid of features on a part, or for a circle of features.
 
-Write a shape once and call it. A cylinder is one `Tube` and two `Disk` calls. `Tube` is the round wall. `Disk` is a cap. A plate is a square box: `Plate` calls `Box(width: size, depth: size, height: thickness)`. The six faces stay in `Box`. That box is centered on X and Y and stands on z = 0. `origin` is the center. `top` is the center of the top face. The cavity example's `Box` publishes `corner` at its minimum point, and the void is seated from that corner.
+Write a shape once and call it. A cylinder is one `Tube` and two `Disk` calls. `Tube` is the round wall. `Disk` is a cap. A plate is a square box: `Plate` calls `Box(width: $plate.size, depth: $plate.size, height: $plate.thickness)`. The six faces stay in `Box`. That box stands on z = 0 and publishes `corner` at its minimum point. The exported plate publishes `origin` at that same corner, which is the point the viewer hangs the model on. The box example seats a void from `corner` and publishes `origin` at the center.
 
-`rectangular_pattern` returns the grid of points. `circular_pattern` returns the points of a circle. These are functions, so the names are `snake_case`. `CylinderAt`, `Plate`, and `Box` are components, so those names are `PascalCase`. `integers(start: 0.0, count: 5.0)` is `[0.0, 1.0, 2.0, 3.0, 4.0]`. A list has no length. `$holes.columns` has one entry per `$holes.count`. On this square plate the same list is the row list. `$pins.indexes` has one entry per pin. The plate's grid list has 5 entries. The pin list has 7. `column` and `row` count from `0`.
+`vector_grid` returns the points of a grid. `circular_pattern` returns the points of a circle. These are functions, so the names are `snake_case`. `Plate`, `Box`, and `Cylinder` are components, so those names are `PascalCase`. `integers(start: 0.0, count: 5.0)` is `[0.0, 1.0, 2.0, 3.0, 4.0]`. A list has no length. The plate's hole grid is `$holes.count_width` by `$holes.count_depth`. The knob circle has `$pins.count` points, which is 7.
 
-Map `CylinderAt` over the points. The function receives the point as `item`, and the call chooses `radius` and `height`. Each location can therefore build its own cylinder. This plate reads `$holes.radius` and `$holes.span` for every hole, and `$pins.radius` and `$pins.height` for every pin. `CylinderAt` publishes `at`, which is that point.
+`place_components` seats one `Cylinder` at each point. The same call chooses `radius` and `height`, so the holes and the knobs are two calls. A hole is cut with `combine: frame => placed => frame - placed`. A knob is kept with `combine: frame => placed => frame + placed`. The point meets `corner.add(vector: item)` and `placed.bottom`. A knob is sunk by `$pins.bite`, so its cap is inside the plate and the wall crosses the top face.
 
-`subtract_cylinders` cuts that list out of the plate. `add_cylinders` unions the pin list onto that plate. `map` builds the list of cylinders. It does not cut them: each result would be a separate copy with one hole. An empty list returns the plate. Otherwise the first cylinder is cut from the plate, and that plate is passed on with the rest of the list. A hole's center meets `plate.origin.add(vector: placed.at)`. A pin's base meets `plate.top.add(vector: placed.at)`. The pin point is sunk by `$pins.bite`.
-
-A size is a parameter of the part. The numbers for the file live in `parameters`, and the script reads them. `pi` is the value the whole script shares. A vector's first argument is the coordinate system from `solid: coords =>` and `expose: coords =>`. Write `Vector(coords: coords, x:, y:, z:)`. Inside `using`, move a point with `offset(x:, y:, z:)` and combine two vectors with `add(vector:)`. `|>` pipes a value into the next argument. `items |> map(f: item => ...)` fills `list`. `>>` composes two functions and binds more tightly. `patterned_plate` is `cut_holes >> add_pins`. A call names every argument, in parameter order. A `def` is top-level. One `join` seats one feature. Pass `join(...)` as `solid`. A `Solid3D` is one closed body.
+The model's parameters belong in the `parameters` section. A size is a parameter of the part. The numbers for the file live there, and the script reads them. `pi` is the value the whole script shares. A vector's first argument is the coordinate system from `solid: coords =>` and `expose: coords =>`. Write `Vector(coords: coords, x:, y:, z:)`. Inside `using`, move a point with `offset(x:, y:, z:)` and combine two vectors with `add(vector:)`. `|>` pipes a value into the next argument. `items |> map(f: item => ...)` fills `list`. `>>` composes two functions and binds more tightly. A call names every argument, in parameter order. A `def` is top-level. One `join` seats one feature. Pass `join(...)` as `solid`. A `Solid3D` is one closed body.
 
 ## Script shape
 
@@ -67,11 +67,11 @@ parameters {
 - `units` is `"mm"` or `"inch"`. The numbers in the script are already in that unit. The compiler does not scale them.
 - `coordinate_system` is `"Z-up"`, `"Y-up"`, or `"X-up"`. Write the coordinates in that system. The viewer uses it to decide which axis points up.
 - `setup` has those two fields and no others.
-- `parameters` sits immediately after `setup`. A group is a name and a block. A field is a name and a value. A group may contain groups.
+- `parameters` sits immediately after `setup`. The model's parameters belong in this section: a size, a count, and a position are fields here. A group is a name and a block. A field is a name and a value. A group may contain groups. When a measurement comes from a standard, that field sits in a group named for the standard. A top-level `def` of a number is for a value the whole script shares, such as `pi`.
 - `$plate` reads that parameter. `$plate.size` reads a field. A solid may also be named `plate`; `plate.origin` is then an anchor. Inside the `plate` group, an earlier field is the short name `size`. A later group reads an earlier one with `$plate.size`.
 - `.` on `$plate` reads a field. `.` on a component reads an anchor, such as `frame.up`.
 - Bind a name with `def name = expression`. `param name = expression` is the same kind of binding. Bind each name once.
-- The script ends with `export(...)`. The value must be a component, usually a call that supplies the sizes: `export(Brick(width: 40.0, depth: 30.0, height: 20.0))`. A number, a vector, a raw solid, a bare `join`, or a function that still expects arguments is rejected. When several exports appear, the last one is published.
+- The script ends with `export(...)`. The value must be a component. A sphere supplies its size at the call: `export(Sphere(radius: 25.0))`. A box reads its sizes from `parameters` and exports the finished component: `export(HollowBox)`. A number, a vector, a raw solid, a bare `join`, or a function that still expects arguments is rejected. When several exports appear, the last one is published.
 - Comments are `//` to the end of the line. Statements are separated by the words above, not by semicolons.
 
 ## Names and arithmetic
@@ -113,11 +113,11 @@ def map: (item: T => U) => (list: [T]) => [U] = f => list => ...
 
 Write a shape once, as a function, and call it at every place that shape appears. Pass the sizes at the call, including in `export`. A second copy of the same faces is a mistake. A second size is another call.
 
-A size belongs to the part that uses it. It is a parameter of that part. The numbers for this file live in `parameters`, and the call reads them. Do not also bind `def size = 100.0`. A top-level number is for a value the whole script shares, such as `pi`.
+A size belongs to the part that uses it. It is a parameter of that part, written in the `parameters` section. The call reads it. Do not also bind `def size = 100.0`. A top-level number is for a value the whole script shares, such as `pi`.
 
 The broom does this. `Cylinder` is defined once. The handle, the ferrule, and the hole through the handle are three calls. The hole is not drawn again on its side. `join` turns that same cylinder until its axis lies across the handle.
 
-A function that is not a component uses `snake_case`, and the name says what it returns. `rectangular_pattern` returns the grid of points. `circular_pattern` returns the points of a circle. `map` calls `CylinderAt` once per point. That call chooses `radius` and `height` for the point it receives. `subtract_cylinders` cuts the resulting list out of the plate. The patterned plate is a square `Box`. It exposes `origin` and `top`. The numbers live in `parameters`. `cut_holes` reads `$holes` and `add_pins` reads `$pins`. `patterned_plate` is `cut_holes >> add_pins`. Export that function of the plate.
+A function that is not a component uses `snake_case`, and the name says what it returns. `vector_grid` returns the grid of points. `circular_pattern` returns the points of a circle. `place_components` seats one component at each point. The call chooses `radius` and `height`. The plate is a square `Box`. It exposes `up`, `right`, and `corner`. The model's parameters belong in the `parameters` section. `PlateWithHoles` reads `$holes` and `PlateWithKnobs` reads `$pins`. Export `PlateWithKnobs`.
 
 A face is a function too, and its name says which surface it is. `Tube` is the round wall. `Disk` is the round cap. A cylinder is those three faces:
 
@@ -228,7 +228,7 @@ integers(start: 0.0, count: 5.0)
 
 That is `[0.0, 1.0, 2.0, 3.0, 4.0]`. The last value is `4.0`. `integers(start: 0.0, count: 0.0)` is `[]`. `integers(start: 0.0 - 2.0, count: 3.0)` is `[-2.0, -1.0, 0.0]`. `start` and `count` are whole numbers, and `count` is zero or more. `5.0 |> integers(start: 1.0)` fills `count`, so that list runs from `1.0` through `5.0`.
 
-`map` returns a new list. On the patterned plate that list is one `CylinderAt` per point. `subtract_cylinders` takes the plate and that list. An empty list returns the plate. Each other step cuts one cylinder from the plate and passes that plate on.
+`map` returns a new list. On the plate, `vector_grid` maps index pairs to points, and `circular_pattern` maps `integers` to the points of a circle. `place_components` then seats one cylinder at each point. An empty list returns the host. Each other step joins one cylinder onto the host and passes that host on.
 
 ## Tuples
 
@@ -309,7 +309,7 @@ The viewer samples each face on a grid of 16 to 32 steps. A detail much smaller 
 
 `Component(solid: coords => solid, expose: coords => { name: vector })` wraps a solid and publishes anchors. `solid` is `coords =>` a solid or a component, or `join(...)`, which is already a function of the coordinate system. `expose` is `coords => { anchors }`, and that parameter is named `coords`. Every anchor is a vector. Names are unique. `part.anchor` reads an anchor the component exposed. `part.coords` does not typecheck, and an expose block cannot publish `coords`. Any other name is an error. An empty publish list is `expose: coords => {}`.
 
-Expose `origin` as the point the viewer hangs the model on. The usual choice is the center of the part.
+Expose `origin` on the exported component as the point the viewer hangs the model on. The box puts that point at the center. The plate puts it at the corner the grid measures from.
 
 ```text
 expose: coords => {
@@ -354,80 +354,6 @@ translation: meet(frame: frame.corner.offset(x: wall, y: wall, z: wall), placed:
 
 A part that should keep the orientation it was built with exposes the same `up` and `right` as the frame part. The translation step is then the only one that moves it.
 
-## Example: a closed box
-
-`Brick` is a function of its three sizes. The export call is where those sizes are chosen. Another brick is another call.
-
-```parascript
-setup {
-    units: "mm",
-    coordinate_system: "Z-up"
-}
-
-def Brick = width => depth => height => Component(
-    solid: coords => Solid3D(faces: [
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(coords: coords, x: u, y: v, z: height)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: 0.0, y: u, z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: width, y: u, z: v))
-    ]),
-    expose: coords => {
-        up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-        origin: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: height / 2.0)
-    }
-)
-
-export(Brick(width: 40.0, depth: 30.0, height: 20.0))
-```
-
-## Example: a box with a cavity
-
-`Box` is the reusable solid. `HollowBox` is a function of the outer size and the wall thickness. It calls `Box` twice. `align` seats the void inside the outer box, and `frame - placed` cuts it out. The cavity is as tall as the outer box and starts one wall thickness up, so the floor remains and the top stays open. The export call chooses the numbers.
-
-```parascript
-setup {
-    units: "mm",
-    coordinate_system: "Z-up"
-}
-
-def Box = width => depth => height => Component(
-    solid: coords => Solid3D(faces: [
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(coords: coords, x: u, y: v, z: height)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: 0.0, y: u, z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: width, y: u, z: v))
-    ]),
-    expose: coords => {
-        up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-        corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
-    }
-)
-
-def HollowBox = w => d => h => wall => Component(
-    solid: join(
-        frame: Box(width: w, depth: d, height: h),
-        placed: Box(width: w - (wall * 2.0), depth: d - (wall * 2.0), height: h),
-        using: frame => placed => align(
-            planar: meet(frame: frame.up, placed: placed.up),
-            translation: meet(frame: frame.corner.offset(x: wall, y: wall, z: wall), placed: placed.corner),
-            rotation: meet(frame: frame.right, placed: placed.right)
-        ),
-        combine: frame => placed => frame - placed
-    ),
-    expose: coords => {
-        origin: Vector(coords: coords, x: w / 2.0, y: d / 2.0, z: h / 2.0)
-    }
-)
-
-export(HollowBox(w: 100.0, d: 50.0, h: 30.0, wall: 3.0))
-```
-
 ## Example: a sphere
 
 There is no sphere primitive. `Sphere` is a function of `radius`, and the export call is where the radius is chosen. One face covers the surface. `u` runs from `0` to `2.0 * pi`, once around. `v` runs from `0` to `pi`, from the top pole to the bottom pole. At both poles `sin(rad: v)` is `0`, so that row of samples meets at one point and the face closes.
@@ -461,6 +387,112 @@ def Sphere = radius => Component(
 )
 
 export(Sphere(radius: 25.0))
+```
+
+## Example: a box
+
+`Box` is six faces standing on z = 0, with `corner` at the minimum point. The sizes live in `parameters`. `HollowBox` calls `Box` twice. The inner box is seated one wall thickness in from `corner`, and `frame - placed` cuts it out. The inner box stops one wall thickness short of the top, so the floor remains and the top stays open. `origin` is the center, which is the point the viewer hangs the model on.
+
+```parascript
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+parameters {
+    width: 100.0,
+    depth: 50.0,
+    height: 30.0,
+    wall_thickness: 3.0
+}
+
+def Box = width => depth => height =>
+    Component(
+        solid: coords =>
+            let top = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
+            let bottom = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
+            let front = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
+            let back = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
+            let left = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: 0, y: u, z: v)) in
+            let right = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
+            Solid3D(faces: [
+                top,
+                bottom,
+                front,
+                back,
+                left,
+                right
+            ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    )
+
+def HollowBox = 
+    let box = Box(
+        width: $width,
+        depth: $depth,
+        height: $height) in 
+    let cutout = Box(
+        width: $width - 2.0*$wall_thickness,
+        depth: $depth - 2.0*$wall_thickness,
+        height: $height - $wall_thickness) in 
+    Component(
+        solid: join(
+            frame: box,
+            placed: cutout,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.corner.offset(
+                        x: $wall_thickness,
+                        y: $wall_thickness,
+                        z: $wall_thickness),
+                    placed: placed.corner),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame - placed
+        ),
+        expose: coords => {
+            origin: Vector(
+                coords: coords,
+                x: $width / 2.0,
+                y: $depth / 2.0,
+                z: $height / 2.0)
+        }
+    )
+
+export(HollowBox)
 ```
 
 ## Example: a broom
@@ -801,13 +833,9 @@ def Broom =
 export(Broom)
 ```
 
-## Example: a patterned plate
+## Example: a plate
 
-`pi` is the only number bound for the whole script. `Disk` and `Tube` are the faces. `Cylinder` names the two caps with `let` and calls `Tube` once. `CylinderAt` calls that cylinder and publishes `at`. `Box` is the rectangular solid: six faces, centered on X and Y, standing on z = 0. `Plate` is a square box, `Box(width: size, depth: size, height: thickness)`. The cavity example's box publishes `corner` at its minimum point, and the void is seated from that corner. This box is centered so `origin` is the center the pattern measures from. `Plate` exposes `up`, `right`, `origin`, and `top`. The numbers live in `parameters`. `cut_holes` reads `$holes`, `add_pins` reads `$pins`, and `patterned_plate` is `cut_holes >> add_pins`. The plate passed to that function is `Plate(size: $plate.size, thickness: $plate.thickness)`. Do not also bind `def size = 100.0` at the top.
-
-`rectangular_pattern` returns the grid of points. `$holes.columns` has one entry per `$holes.count`, and this square plate uses that same list for the rows. Those five columns are also `integers(start: 0.0, count: 5.0)`. `circular_pattern` returns the points of the pin circle. `$pins.indexes` has one entry per pin. There is no way to ask a list for its length, so both lists are fields of those groups. The column list has 5 entries, so the grid is 5 by 5. The pin list has 7 entries.
-
-`map` builds one `CylinderAt` per point. The function names its parameter `item`. `radius` and `height` are arguments of that call, so a point can carry a cylinder of its own size. This plate uses one hole radius and one pin radius. `CylinderAt` keeps the point as `at`. `subtract_cylinders` cuts the hole list out of the one plate. `add_cylinders` unions the pin list onto that drilled solid. Each `join` seats one cylinder: a hole center meets `plate.origin.add(vector: placed.at)`, and a pin base meets `plate.top.add(vector: placed.at)`. The cutter is taller than the plate, so the hole passes through both faces. The pin point is sunk by `$pins.bite`, so the pin overlaps the plate and stands above it.
+The plate is the form to copy for a grid of features and a circle of features. `Box` and `Cylinder` are written once. `vector_grid` returns the points of the hole grid. `circular_pattern` returns the points of the knob circle. `place_components` folds that list. Each step joins one copy of `place` where the host's `corner`, shifted by the point, meets the placed part's `bottom`. `combine: frame => placed => frame - placed` cuts the holes. `combine: frame => placed => frame + placed` keeps the knobs. The lambda is written at the call, and its parameters are named `frame` and `placed`. `fold` is defined in the script. `integers` supplies the counts. A knob is taller than the plate by `$pins.bite` and its base sits that far below the top face, so the cap is inside the plate.
 
 ```parascript
 setup {
@@ -816,7 +844,7 @@ setup {
 }
 
 // The model's sizes, grouped by the part they describe.
-// cut_holes reads $holes. add_pins reads $pins. patterned_plate is cut_holes >> add_pins.
+// PlateWithHoles reads $holes. PlateWithKnobs reads $pins.
 parameters {
     plate: {
         size: 100.0,
@@ -824,103 +852,115 @@ parameters {
     },
     holes: {
         radius: 3.0,
-        span: 16.0,
-        count: 5.0,
-        pitch: 12.0,
-        columns: [0.0, 1.0, 2.0, 3.0, 4.0]
+        count_width: 5.0,
+        count_depth: 3.0,
+        margin: 25.0
     },
     pins: {
         radius: 3.0,
-        height: 12.0,
         count: 7.0,
-        bite: 1.0,
         ring: 40.0,
-        indexes: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        bite: 1.0
     }
 }
 
 // pi is a value the whole script shares.
 def pi = 3.14159265359
 
-// A round cap. A cylinder calls this twice, at the bottom and at the top.
-def Disk = coords => radius => z => Surface2D(
-    max_u: 2.0 * pi,
-    min_v: u => 0.0, max_v: u => radius,
-    formula: u => v => Vector(coords: coords, 
-        x: v * cos(rad: u),
-        y: v * sin(rad: u),
-        z: z
-    )
-)
-
-// The round wall. This is a face, the same kind of 2D surface as Disk.
-def Tube = coords => radius => height => Surface2D(
-    max_u: 2.0 * pi,
-    min_v: u => 0.0, max_v: u => height,
-    formula: u => v => Vector(coords: coords, 
-        x: radius * cos(rad: u),
-        y: radius * sin(rad: u),
-        z: v
-    )
-)
-
-// The rectangular solid: six faces. Centered on X and Y, standing on z = 0.
-// origin is the center. top is the center of the top face.
-def Box = width => depth => height => Component(
-    solid: coords => Solid3D(faces: [
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(coords: coords, x: u - (width / 2.0), y: v - (depth / 2.0), z: 0.0)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => depth, formula: u => v => Vector(coords: coords, x: u - (width / 2.0), y: v - (depth / 2.0), z: height)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: u - (width / 2.0), y: 0.0 - (depth / 2.0), z: v)),
-        Surface2D(max_u: width, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: u - (width / 2.0), y: depth / 2.0, z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: 0.0 - (width / 2.0), y: u - (depth / 2.0), z: v)),
-        Surface2D(max_u: depth, min_v: u => 0.0, max_v: u => height, formula: u => v => Vector(coords: coords, x: width / 2.0, y: u - (depth / 2.0), z: v))
-    ]),
-    expose: coords => {
-        up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-        origin: Vector(coords: coords, x: 0.0, y: 0.0, z: height / 2.0),
-        top: Vector(coords: coords, x: 0.0, y: 0.0, z: height)
-    }
-)
-
-// A square box. size is the width and the depth.
-def Plate = size => thickness => Box(width: size, depth: size, height: thickness)
-
-// One centered grid point. column and row count from 0.
-def grid_point = coords => column_count => row_count => column_pitch => row_pitch => column => row => Vector(coords: coords, 
-    x: (column - ((column_count - 1.0) / 2.0)) * column_pitch,
-    y: (row - ((row_count - 1.0) / 2.0)) * row_pitch,
-    z: 0.0
-)
-
-def row_points = coords => column_count => row_count => column_pitch => row_pitch => columns => row => columns
-    |> map(f: item => grid_point(coords: coords, column_count: column_count, row_count: row_count, column_pitch: column_pitch, row_pitch: row_pitch, column: item, row: row))
-
-def append_points = left => right => match left {
-    [] => right,
-    head :: tail => head :: append_points(left: tail, right: right)
+def fold: (item: T => accumulator: A => A) => (initial: A) => (list: [T]) => A = f => initial => list => match list {
+    [] => initial,
+    head :: tail => f(item: head, accumulator: fold(f: f, initial: initial, list: tail))
 }
 
-def flatten_rows = rows => match rows {
-    [] => [],
-    head :: tail => append_points(left: head, right: flatten_rows(rows: tail))
-}
-
-// The grid of points. columns and rows each have one entry per count, from 0.
-def rectangular_pattern = coords => column_count => row_count => column_pitch => row_pitch => columns => rows => rows
-    |> map(f: item => row_points(coords: coords, column_count: column_count, row_count: row_count, column_pitch: column_pitch, row_pitch: row_pitch, columns: columns, row: item))
-    |> flatten_rows
-
-// The points of a circle in the plate's plane. indexes has one entry per point, from 0.
-def circular_pattern = coords => point_count => radius => indexes => indexes
-    |> map(f: item => Vector(coords: coords, 
-        x: radius * cos(rad: item * (2.0 * pi / point_count)),
-        y: radius * sin(rad: item * (2.0 * pi / point_count)),
-        z: 0.0
+def vector_grid = start_u => end_u => count_u => start_v => end_v => count_v => point =>
+    let grid = u_count => v_count =>
+        let us = integers(start: 0.0, count: u_count) in
+        let vs = integers(start: 0.0, count: v_count) in
+        let row_onto = v => points => fold(
+            f: item => accumulator => (item, v) :: accumulator,
+            initial: points,
+            list: us
+        ) in
+        fold(
+            f: item => accumulator => row_onto(v: item, points: accumulator),
+            initial: [],
+            list: vs
+        ) in
+    let step_u = (end_u - start_u) / (count_u - 1.0) in
+    let step_v = (end_v - start_v) / (count_v - 1.0) in
+    grid(u_count: count_u, v_count: count_v)
+    |> map(f: item => let (u, v) = item in point(
+        u: start_u + (u * step_u),
+        v: start_v + (v * step_v)
     ))
 
-// The cylinder. bottom and top name the caps. The anchors are the points a join meets.
+def Box = width => depth => height =>
+    Component(
+        solid: coords =>
+            let top = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
+            let bottom = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
+            let front = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
+            let back = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
+            let left = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: 0, y: u, z: v)) in
+            let right = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
+            Solid3D(faces: [
+                top,
+                bottom,
+                front,
+                back,
+                left,
+                right
+            ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    )
+
 def Cylinder = radius => height =>
+    let Disk = coords => radius => z => Surface2D(
+        max_u: 2.0 * pi,
+        min_v: u => 0.0, max_v: u => radius,
+        formula: u => v => Vector(coords: coords, 
+            x: v * cos(rad: u),
+            y: v * sin(rad: u),
+            z: z
+        )
+    ) in
+    let Tube = coords => radius => height => Surface2D(
+        max_u: 2.0 * pi,
+        min_v: u => 0.0, max_v: u => height,
+        formula: u => v => Vector(coords: coords, 
+            x: radius * cos(rad: u),
+            y: radius * sin(rad: u),
+            z: v
+        )
+    ) in
     Component(
         solid: coords =>
             let bottom = Disk(coords: coords, radius: radius, z: 0.0) in
@@ -939,108 +979,1286 @@ def Cylinder = radius => height =>
         }
     )
 
-// A cylinder for one point. at is the point, kept so the plate can seat it.
-def CylinderAt = radius => height => at =>
-    let part = Cylinder(radius: radius, height: height) in
+def place_components = host => points => place => combine => fold(
+    f: item => accumulator => Component(
+        solid: join(
+            frame: accumulator,
+            placed: place,
+            using: frame => placed => align(
+                planar: meet(frame: accumulator.up, placed: placed.up),
+                translation: meet(frame: accumulator.corner.add(vector: item), placed: placed.bottom),
+                rotation: meet(frame: accumulator.right, placed: placed.right)
+            ),
+            combine: combine
+        ),
+        expose: coords => { up: accumulator.up, right: accumulator.right, corner: accumulator.corner }
+    ),
+    initial: host,
+    list: points
+)
+
+// A square box. size is the width and the depth.
+def Plate = Box(width: $plate.size, depth: $plate.size, height: $plate.thickness)
+
+def circular_pattern = coords => count => radius =>
+    integers(start: 0.0, count: count)
+    |> map(f: item => Vector(coords: coords,
+        x: ($plate.size / 2.0) + (radius * cos(rad: item * (2.0 * pi / count))),
+        y: ($plate.size / 2.0) + (radius * sin(rad: item * (2.0 * pi / count))),
+        z: $plate.thickness - $pins.bite
+    ))
+
+def PlateWithHoles = coords => place_components(
+    host: Plate,
+    points: vector_grid(
+        start_u: $holes.margin + $holes.radius,
+        end_u: $plate.size - $holes.margin - $holes.radius,
+        count_u: $holes.count_width,
+        start_v: $holes.margin + $holes.radius,
+        end_v: $plate.size - $holes.margin - $holes.radius,
+        count_v: $holes.count_depth,
+        point: u=>v=>Vector(coords: coords, x: u, y: v, z: 0.0)),
+    place: Cylinder(radius: $holes.radius, height: $plate.thickness),
+    combine: frame => placed => frame - placed
+)
+
+def PlateWithKnobs = coords => place_components(
+    host: PlateWithHoles(coords: coords),
+    points: circular_pattern(coords: coords, count: $pins.count, radius: $pins.ring),
+    place: Cylinder(radius: $pins.radius, height: $plate.thickness + $pins.bite),
+    combine: frame => placed => frame + placed
+)
+
+export(Component(
+    solid: coords => PlateWithKnobs(coords: coords)
+    expose: coords => {
+        origin: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+    }
+))
+```
+
+## Example: a screw
+
+A measurement from a standard sits in the group named for that standard. `head.iso_4017` holds the across-flats width, the head height, and the nominal length. `thread.iso_68_1` holds the pitch. `flat`, `corner`, and `tip` are derived from those fields. The cosine series follows the ISO 68-1 basic profile. Each turn of the thread is its own face. One face for the whole shank would be sampled too coarsely to show the pitch. `pi` is the number the whole script shares.
+
+```parascript
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+// M3x16 hexagon-head screw. A measurement from a standard sits in the group
+// named for that standard. The head is an ISO 4017 hexagon with a vertex on
+// the Y axis. The shank follows the ISO 68-1 M3 coarse basic profile:
+// 60 degrees, major diameter 3 mm, minor diameter 2.459 mm.
+// The head sits on z = 0 and the tip is one length below it.
+// Each turn is its own face. One face for the whole shank would be sampled
+// too coarsely to show the pitch.
+parameters {
+    head: {
+        iso_4017: {
+            across_flats: 5.5,
+            height: 2.0,
+            length: 16.0
+        },
+        flat: iso_4017.across_flats / 2.0,
+        // Distance from the axis to a vertex. The angle is pi / 6, with the pi bound below.
+        corner: flat / cos(rad: 3.14159265359 / 6.0)
+    },
+    thread: {
+        iso_68_1: {
+            pitch: 0.5
+        },
+        tip: 0.0 - $head.iso_4017.length,
+        // Closure of the shank inside the head, so the hex underside stays a solid face.
+        bury: 0.05,
+        // Cosine series of the ISO 68-1 external basic profile.
+        // Phase 0 is the crest. The series stays within 0.01 mm of that profile.
+        c0: 1.347769,
+        c1: 0.143114,
+        c2: 0.015512,
+        c3: 0.0 - 0.003163,
+        c4: 0.005484,
+        c5: 0.0 - 0.003825
+    }
+}
+
+// pi is a value the whole script shares.
+def pi = 3.14159265359
+
+// Radius at a seam, where the helical phase collapses to the angle around the shank.
+def end_radius = u => $thread.c0 + $thread.c1 * cos(rad: u) + $thread.c2 * cos(rad: 2.0 * u) + $thread.c3 * cos(rad: 3.0 * u) + $thread.c4 * cos(rad: 4.0 * u) + $thread.c5 * cos(rad: 5.0 * u)
+
+// One pitch of the helix. Clockwise in u so the wall faces outward.
+def wall = coords => index => Surface2D(
+    max_u: 2.0 * pi,
+    min_v: u => $thread.tip + index * $thread.iso_68_1.pitch,
+    max_v: u => $thread.tip + index * $thread.iso_68_1.pitch + $thread.iso_68_1.pitch,
+    formula: u => v => Vector(coords: coords, 
+        x: ($thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u))) * cos(rad: u),
+        y: ($thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u))) * (0.0 - sin(rad: u)),
+        z: v
+    )
+)
+
+def tip_cap = coords => Surface2D(
+    max_u: 2.0 * pi,
+    min_v: u => 0.0, max_v: end_radius,
+    formula: u => v => Vector(coords: coords, 
+        x: v * cos(rad: u),
+        y: v * (0.0 - sin(rad: u)),
+        z: $thread.tip
+    )
+)
+
+// Short collar and cap buried in the head. They close the shank without showing.
+def collar = coords => Surface2D(
+    max_u: 2.0 * pi,
+    min_v: u => 0.0, max_v: u => $thread.bury,
+    formula: u => v => Vector(coords: coords, 
+        x: ($thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u))) * cos(rad: u),
+        y: ($thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * v / $thread.iso_68_1.pitch - u))) * (0.0 - sin(rad: u)),
+        z: v
+    )
+)
+
+def shank_cap = coords => Surface2D(
+    max_u: 2.0 * pi,
+    min_v: u => 0.0,
+    max_v: u => $thread.c0 + $thread.c1 * cos(rad: 1.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)) + $thread.c2 * cos(rad: 2.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)) + $thread.c3 * cos(rad: 3.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)) + $thread.c4 * cos(rad: 4.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)) + $thread.c5 * cos(rad: 5.0 * (2.0 * pi * $thread.bury / $thread.iso_68_1.pitch - u)),
+    formula: u => v => Vector(coords: coords, 
+        x: v * cos(rad: u),
+        y: v * sin(rad: u),
+        z: $thread.bury
+    )
+)
+
+// One flat of the hexagon. index 0 starts at 30 degrees and each step is 60 degrees.
+// u runs from the higher-angle vertex back to this one so the flat faces outward.
+def side = coords => index => Surface2D(
+    max_u: 1.0,
+    min_v: u => 0.0, max_v: u => $head.iso_4017.height,
+    formula: u => v => Vector(coords: coords, 
+        x: (1.0 - u) * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + u * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0),
+        y: (1.0 - u) * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + u * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0),
+        z: v
+    )
+)
+
+def head_top = coords => index => Surface2D(
+    max_u: 1.0,
+    min_v: u => 0.0, max_v: u => 1.0,
+    formula: u => v => Vector(coords: coords, 
+        x: u * ((1.0 - v) * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + v * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0)),
+        y: u * ((1.0 - v) * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0) + v * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0)),
+        z: $head.iso_4017.height
+    )
+)
+
+def head_bottom = coords => index => Surface2D(
+    max_u: 1.0,
+    min_v: u => 0.0, max_v: u => 1.0,
+    formula: u => v => Vector(coords: coords, 
+        x: u * ((1.0 - v) * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0) + v * $head.corner * cos(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0)),
+        y: u * ((1.0 - v) * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0) + v * $head.corner * sin(rad: index * pi / 3.0 + pi / 6.0 + pi / 3.0)),
+        z: 0.0
+    )
+)
+
+def M3Screw = Component(
+    solid: coords => Solid3D(faces: [
+        tip_cap(coords: coords),
+        collar(coords: coords),
+        shank_cap(coords: coords),
+        side(coords: coords, index: 0.0),
+        side(coords: coords, index: 1.0),
+        side(coords: coords, index: 2.0),
+        side(coords: coords, index: 3.0),
+        side(coords: coords, index: 4.0),
+        side(coords: coords, index: 5.0),
+        head_top(coords: coords, index: 0.0),
+        head_top(coords: coords, index: 1.0),
+        head_top(coords: coords, index: 2.0),
+        head_top(coords: coords, index: 3.0),
+        head_top(coords: coords, index: 4.0),
+        head_top(coords: coords, index: 5.0),
+        head_bottom(coords: coords, index: 0.0),
+        head_bottom(coords: coords, index: 1.0),
+        head_bottom(coords: coords, index: 2.0),
+        head_bottom(coords: coords, index: 3.0),
+        head_bottom(coords: coords, index: 4.0),
+        head_bottom(coords: coords, index: 5.0),
+        wall(coords: coords, index: 0.0),
+        wall(coords: coords, index: 1.0),
+        wall(coords: coords, index: 2.0),
+        wall(coords: coords, index: 3.0),
+        wall(coords: coords, index: 4.0),
+        wall(coords: coords, index: 5.0),
+        wall(coords: coords, index: 6.0),
+        wall(coords: coords, index: 7.0),
+        wall(coords: coords, index: 8.0),
+        wall(coords: coords, index: 9.0),
+        wall(coords: coords, index: 10.0),
+        wall(coords: coords, index: 11.0),
+        wall(coords: coords, index: 12.0),
+        wall(coords: coords, index: 13.0),
+        wall(coords: coords, index: 14.0),
+        wall(coords: coords, index: 15.0),
+        wall(coords: coords, index: 16.0),
+        wall(coords: coords, index: 17.0),
+        wall(coords: coords, index: 18.0),
+        wall(coords: coords, index: 19.0),
+        wall(coords: coords, index: 20.0),
+        wall(coords: coords, index: 21.0),
+        wall(coords: coords, index: 22.0),
+        wall(coords: coords, index: 23.0),
+        wall(coords: coords, index: 24.0),
+        wall(coords: coords, index: 25.0),
+        wall(coords: coords, index: 26.0),
+        wall(coords: coords, index: 27.0),
+        wall(coords: coords, index: 28.0),
+        wall(coords: coords, index: 29.0),
+        wall(coords: coords, index: 30.0),
+        wall(coords: coords, index: 31.0)
+    ]),
+    expose: coords => {}
+)
+
+export(M3Screw)
+```
+
+## Example: a remote
+
+The remote seats many parts on one body with `place_components`. The keys share one `Cylinder`. The rockers share one `Stadium`. The ring is a cylinder with a smaller cylinder cut out of it. The groove is a `Box` cut from the body, and the badge is a `Box` added to it. Positions live in `layout`. Raised parts sit at `$body.rise`, which is `thick - bite`.
+
+```parascript
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+// Samsung remote. The body is a rounded slab. Keys, the ring, the rockers,
+// and the badge sit on that slab. The groove is cut into it.
+// Sizes are grouped by the part they describe.
+parameters {
+    body: {
+        radius: 21.0,
+        straight: 134.0,
+        thick: 14.0,
+        bite: 1.0,
+        // Raised parts sit this far below the top face, so the cap is not flush.
+        rise: thick - bite
+    },
+    keys: {
+        radius: 4.5,
+        height: 2.0
+    },
+    ring: {
+        radius: 15.0,
+        height: 2.2,
+        bore: 7.6,
+        bore_height: 4.2
+    },
+    select: {
+        radius: 5.2,
+        height: 2.6
+    },
+    rocker: {
+        radius: 4.0,
+        straight: 9.0,
+        height: 2.0
+    },
+    groove: {
+        width: 28.0,
+        depth: 2.0,
+        height: 3.0,
+        sink: 1.2
+    },
+    badge: {
+        width: 24.0,
+        depth: 3.6,
+        height: 1.4
+    },
+    layout: {
+        power: { x: 0.0 - 9.0, y: 72.0 },
+        mic: { x: 9.0, y: 72.0 },
+        numbers: { x: 0.0 - 12.0, y: 58.0 },
+        back: { x: 0.0 - 13.0, y: 9.0 },
+        home: { x: 0.0, y: 9.0 },
+        play: { x: 13.0, y: 9.0 },
+        volume: { x: 0.0 - 12.0, y: 0.0 - 10.0 },
+        channel: { x: 12.0, y: 0.0 - 10.0 },
+        netflix: { x: 0.0 - 12.0, y: 0.0 - 35.0 },
+        tv: { x: 10.0, y: 0.0 - 33.0 },
+        disney: { x: 0.0 - 5.0, y: 0.0 - 49.0 },
+        prime: { x: 12.0, y: 0.0 - 49.0 },
+        ring: { x: 0.0, y: 33.0 },
+        groove: { x: 0.0, y: 0.0 - 24.0 },
+        badge: { x: 0.0, y: 0.0 - 74.0 }
+    }
+}
+
+// pi is a value the whole script shares.
+def pi = 3.14159265359
+
+def fold: (item: T => accumulator: A => A) => (initial: A) => (list: [T]) => A = f => initial => list => match list {
+    [] => initial,
+    head :: tail => f(item: head, accumulator: fold(f: f, initial: initial, list: tail))
+}
+
+def Box = width => depth => height =>
     Component(
-        solid: coords => part,
+        solid: coords =>
+            let top = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
+            let bottom = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
+            let front = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
+            let back = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
+            let left = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: 0.0, y: u, z: v)) in
+            let right = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
+            Solid3D(faces: [
+                top,
+                bottom,
+                front,
+                back,
+                left,
+                right
+            ]),
         expose: coords => {
-            up: part.up,
-            right: part.right,
-            bottom: part.bottom,
-            top: part.top,
-            center: part.center,
-            at: at
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            // Center of the face on z = 0, so a placed box sits on the point.
+            bottom: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: 0.0)
         }
     )
 
-// Cut one cylinder from the plate. The result is that plate, and it still exposes origin and top.
-// The center meets the plate's center, shifted by the point.
-def subtract_cylinder = plate => placed => Component(
-    solid: join(
-        frame: plate,
-        placed: placed,
-        using: frame => placed => align(
-            planar: meet(frame: plate.up, placed: placed.up),
-            translation: meet(frame: plate.origin.add(vector: placed.at), placed: placed.center),
-            rotation: meet(frame: plate.right, placed: placed.right)
-        ),
-        combine: frame => placed => frame - placed
-    ),
-    expose: coords => { up: plate.up, right: plate.right, origin: plate.origin, top: plate.top }
-)
-
-// map builds the cylinders. It cannot cut them, because each cut needs the plate the previous cut returned.
-def subtract_cylinders = plate => cylinders => match cylinders {
-    [] => plate,
-    head :: tail => subtract_cylinders(
-        plate: subtract_cylinder(plate: plate, placed: head),
-        cylinders: tail
-    )
-}
-
-// Add one cylinder to the plate. Its base meets the plate's top, shifted by the point.
-def add_cylinder = plate => placed => Component(
-    solid: join(
-        frame: plate,
-        placed: placed,
-        using: frame => placed => align(
-            planar: meet(frame: plate.up, placed: placed.up),
-            translation: meet(frame: plate.top.add(vector: placed.at), placed: placed.bottom),
-            rotation: meet(frame: plate.right, placed: placed.right)
-        ),
-        combine: frame => placed => frame + placed
-    ),
-    expose: coords => { up: plate.up, right: plate.right, origin: plate.origin, top: plate.top }
-)
-
-def add_cylinders = plate => cylinders => match cylinders {
-    [] => plate,
-    head :: tail => add_cylinders(
-        plate: add_cylinder(plate: plate, placed: head),
-        cylinders: tail
-    )
-}
-
-// The grid, then one cylinder per point, then those cylinders cut out of this plate.
-def cut_holes = plate => Component(
-    solid: coords =>
-        let drilled = rectangular_pattern(
-            coords: coords,
-            column_count: $holes.count,
-            row_count: $holes.count,
-            column_pitch: $holes.pitch,
-            row_pitch: $holes.pitch,
-            columns: $holes.columns,
-            rows: $holes.columns
+def Cylinder = radius => height =>
+    let Disk = coords => radius => z => Surface2D(
+        max_u: 2.0 * pi,
+        min_v: u => 0.0, max_v: u => radius,
+        formula: u => v => Vector(coords: coords,
+            x: v * cos(rad: u),
+            y: v * sin(rad: u),
+            z: z
         )
-            |> map(f: item => CylinderAt(radius: $holes.radius, height: $holes.span, at: item))
-            |> subtract_cylinders(plate: plate) in
-        drilled,
-    expose: coords => { up: plate.up, right: plate.right, origin: plate.origin, top: plate.top }
-)
-
-// The circle, sunk by $pins.bite, then one pin per point, added to the plate.
-def add_pins = plate => Component(
-    solid: coords =>
-        let pinned = circular_pattern(
-            coords: coords,
-            point_count: $pins.count,
-            radius: $pins.ring,
-            indexes: $pins.indexes
+    ) in
+    let Tube = coords => radius => height => Surface2D(
+        max_u: 2.0 * pi,
+        min_v: u => 0.0, max_v: u => height,
+        formula: u => v => Vector(coords: coords,
+            x: radius * cos(rad: u),
+            y: radius * sin(rad: u),
+            z: v
         )
-            |> map(f: item => item.offset(x: 0.0, y: 0.0, z: 0.0 - $pins.bite))
-            |> map(f: item => CylinderAt(radius: $pins.radius, height: $pins.height, at: item))
-            |> add_cylinders(plate: plate) in
-        pinned,
-    expose: coords => { up: plate.up, right: plate.right, origin: plate.origin, top: plate.top }
+    ) in
+    Component(
+        solid: coords =>
+            let bottom = Disk(coords: coords, radius: radius, z: 0.0) in
+            let top = Disk(coords: coords, radius: radius, z: height) in
+            Solid3D(faces: [
+                Tube(coords: coords, radius: radius, height: height),
+                bottom,
+                top
+            ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            top: Vector(coords: coords, x: 0.0, y: 0.0, z: height),
+            center: Vector(coords: coords, x: 0.0, y: 0.0, z: height / 2.0)
+        }
+    )
+
+// A slab with semicircular caps on the long axis. straight is the length between the caps.
+def Stadium = radius => straight => height =>
+    Component(
+        solid: coords =>
+            let half = straight / 2.0 in
+            let top = Surface2D(
+                max_u: radius * 2.0,
+                min_v: u => 0.0,
+                max_v: u => straight,
+                formula: u => v => Vector(coords: coords, x: u - radius, y: v - half, z: height)) in
+            let bottom = Surface2D(
+                max_u: radius * 2.0,
+                min_v: u => 0.0,
+                max_v: u => straight,
+                formula: u => v => Vector(coords: coords, x: u - radius, y: v - half, z: 0.0)) in
+            let cap_top = Surface2D(
+                max_u: pi,
+                min_v: u => 0.0,
+                max_v: u => radius,
+                formula: u => v => Vector(coords: coords, x: v * cos(rad: u), y: half + (v * sin(rad: u)), z: height)) in
+            let cap_bottom = Surface2D(
+                max_u: pi,
+                min_v: u => 0.0,
+                max_v: u => radius,
+                formula: u => v => Vector(coords: coords, x: v * cos(rad: u), y: 0.0 - half - (v * sin(rad: u)), z: height)) in
+            let sole_top = Surface2D(
+                max_u: pi,
+                min_v: u => 0.0,
+                max_v: u => radius,
+                formula: u => v => Vector(coords: coords, x: v * cos(rad: u), y: half + (v * sin(rad: u)), z: 0.0)) in
+            let sole_bottom = Surface2D(
+                max_u: pi,
+                min_v: u => 0.0,
+                max_v: u => radius,
+                formula: u => v => Vector(coords: coords, x: v * cos(rad: u), y: 0.0 - half - (v * sin(rad: u)), z: 0.0)) in
+            let side_right = Surface2D(
+                max_u: straight,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: radius, y: u - half, z: v)) in
+            let side_left = Surface2D(
+                max_u: straight,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: 0.0 - radius, y: u - half, z: v)) in
+            let rim_top = Surface2D(
+                max_u: pi,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: radius * cos(rad: u), y: half + (radius * sin(rad: u)), z: v)) in
+            let rim_bottom = Surface2D(
+                max_u: pi,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: radius * cos(rad: u), y: 0.0 - half - (radius * sin(rad: u)), z: v)) in
+            Solid3D(faces: [
+                top,
+                bottom,
+                cap_top,
+                cap_bottom,
+                sole_top,
+                sole_bottom,
+                side_right,
+                side_left,
+                rim_top,
+                rim_bottom
+            ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    )
+
+def place_components = host => points => place => combine => fold(
+    f: item => accumulator => Component(
+        solid: join(
+            frame: accumulator,
+            placed: place,
+            using: frame => placed => align(
+                planar: meet(frame: accumulator.up, placed: placed.up),
+                translation: meet(frame: accumulator.corner.add(vector: item), placed: placed.bottom),
+                rotation: meet(frame: accumulator.right, placed: placed.right)
+            ),
+            combine: combine
+        ),
+        expose: coords => { up: accumulator.up, right: accumulator.right, corner: accumulator.corner }
+    ),
+    initial: host,
+    list: points
 )
 
-def patterned_plate = cut_holes >> add_pins
+def Ring =
+    Component(
+        solid: join(
+            frame: Cylinder(radius: $ring.radius, height: $ring.height),
+            placed: Cylinder(radius: $ring.bore, height: $ring.bore_height),
+            using: frame => placed => align(
+                planar: meet(frame: frame.up, placed: placed.up),
+                translation: meet(frame: frame.center, placed: placed.center),
+                rotation: meet(frame: frame.right, placed: placed.right)
+            ),
+            combine: frame => placed => frame - placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    )
 
-export(patterned_plate(
-    plate: Plate(size: $plate.size, thickness: $plate.thickness)
+def Body = Stadium(radius: $body.radius, straight: $body.straight, height: $body.thick)
+
+def key_points = coords => [
+    Vector(coords: coords, x: $layout.power.x, y: $layout.power.y, z: $body.rise),
+    Vector(coords: coords, x: $layout.mic.x, y: $layout.mic.y, z: $body.rise),
+    Vector(coords: coords, x: $layout.numbers.x, y: $layout.numbers.y, z: $body.rise),
+    Vector(coords: coords, x: $layout.back.x, y: $layout.back.y, z: $body.rise),
+    Vector(coords: coords, x: $layout.home.x, y: $layout.home.y, z: $body.rise),
+    Vector(coords: coords, x: $layout.play.x, y: $layout.play.y, z: $body.rise),
+    Vector(coords: coords, x: $layout.netflix.x, y: $layout.netflix.y, z: $body.rise),
+    Vector(coords: coords, x: $layout.tv.x, y: $layout.tv.y, z: $body.rise),
+    Vector(coords: coords, x: $layout.disney.x, y: $layout.disney.y, z: $body.rise),
+    Vector(coords: coords, x: $layout.prime.x, y: $layout.prime.y, z: $body.rise)
+]
+
+def BodyWithGroove = coords => place_components(
+    host: Body,
+    points: [Vector(coords: coords, x: $layout.groove.x, y: $layout.groove.y, z: $body.thick - $groove.sink)],
+    place: Box(width: $groove.width, depth: $groove.depth, height: $groove.height),
+    combine: frame => placed => frame - placed
+)
+
+def BodyWithKeys = coords => place_components(
+    host: BodyWithGroove(coords: coords),
+    points: key_points(coords: coords),
+    place: Cylinder(radius: $keys.radius, height: $keys.height),
+    combine: frame => placed => frame + placed
+)
+
+def BodyWithRing = coords => place_components(
+    host: BodyWithKeys(coords: coords),
+    points: [Vector(coords: coords, x: $layout.ring.x, y: $layout.ring.y, z: $body.rise)],
+    place: Ring,
+    combine: frame => placed => frame + placed
+)
+
+def BodyWithSelect = coords => place_components(
+    host: BodyWithRing(coords: coords),
+    points: [Vector(coords: coords, x: $layout.ring.x, y: $layout.ring.y, z: $body.rise)],
+    place: Cylinder(radius: $select.radius, height: $select.height),
+    combine: frame => placed => frame + placed
+)
+
+def BodyWithRockers = coords => place_components(
+    host: BodyWithSelect(coords: coords),
+    points: [
+        Vector(coords: coords, x: $layout.volume.x, y: $layout.volume.y, z: $body.rise),
+        Vector(coords: coords, x: $layout.channel.x, y: $layout.channel.y, z: $body.rise)
+    ],
+    place: Stadium(radius: $rocker.radius, straight: $rocker.straight, height: $rocker.height),
+    combine: frame => placed => frame + placed
+)
+
+def Remote = coords => place_components(
+    host: BodyWithRockers(coords: coords),
+    points: [Vector(coords: coords, x: $layout.badge.x, y: $layout.badge.y, z: $body.rise)],
+    place: Box(width: $badge.width, depth: $badge.depth, height: $badge.height),
+    combine: frame => placed => frame + placed
+)
+
+export(Component(
+    solid: coords => Remote(coords: coords)
+    expose: coords => {
+        origin: Vector(coords: coords, x: 0.0, y: 0.0, z: $body.thick / 2.0)
+    }
 ))
+```
+
+## Example: a car
+
+The car calls `Box` for the body and the cabin, and `Wheel` for every wheel. `Axle` joins two wheels. The cabin sits on the body's `top` and overlaps it by `$cabin.overlap`. Two axles are seated a wheelbase apart. Sizes are grouped by part in `parameters`. Each `join` is wrapped in `Component` so the next mate can read `up`, `right`, and `at`.
+
+```parascript
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+parameters {
+    body: {
+        width: 100.0,
+        depth: 200.0,
+        height: 20.0
+    },
+    cabin: {
+        width: 80.0,
+        depth: 70.0,
+        height: 32.0,
+        overlap: 8.0
+    },
+    wheel: {
+        radius: 12.0,
+        width: 14.0,
+        ride: 8.0
+    },
+    axle: {
+        nose: 42.0,
+        wheelbase: 120.0
+    }
+}
+
+def pi = 3.14159265359
+
+def Box = width => depth => height =>
+    Component(
+        solid: coords =>
+            let top = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
+            let bottom = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
+            let front = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
+            let back = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
+            let left = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: 0.0, y: u, z: v)) in
+            let right = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
+            Solid3D(faces: [
+                    top,
+                    bottom,
+                    front,
+                    back,
+                    left,
+                    right
+                ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            bottom: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: 0.0),
+            top: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: height)
+        }
+    )
+
+def Wheel = radius => width =>
+    Component(
+        solid: coords =>
+            let half = width / 2.0 in
+            let wall = Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => width,
+                formula: u => v => Vector(coords: coords, 
+                    x: 0.0 - half + v,
+                    y: radius * cos(rad: u),
+                    z: radius * sin(rad: u))) in
+            let left = Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => radius,
+                formula: u => v => Vector(coords: coords, 
+                    x: 0.0 - half,
+                    y: v * cos(rad: u),
+                    z: v * sin(rad: u))) in
+            let right = Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => radius,
+                formula: u => v => Vector(coords: coords, 
+                    x: half,
+                    y: v * cos(rad: u),
+                    z: v * sin(rad: u))) in
+            Solid3D(faces: [
+                    wall,
+                    left,
+                    right
+                ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    )
+
+def Axle =
+    let track = $body.width - $wheel.width in
+    let left = Wheel(
+        radius: $wheel.radius,
+        width: $wheel.width) in
+    let right = Wheel(
+        radius: $wheel.radius,
+        width: $wheel.width) in
+    Component(
+        solid: join(
+            frame: left,
+            placed: right,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.at.offset(x: track,
+                        y: 0.0,
+                        z: 0.0),
+                    placed: placed.at),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    )
+
+def Car =
+    let body = Box(
+        width: $body.width,
+        depth: $body.depth,
+        height: $body.height) in
+    let cabin = Box(
+        width: $cabin.width,
+        depth: $cabin.depth,
+        height: $cabin.height) in
+    let hull = Component(
+        solid: join(
+            frame: body,
+            placed: cabin,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.top.offset(x: 0.0,
+                        y: 0.0,
+                        z: 0.0 - $cabin.overlap),
+                    placed: placed.bottom),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    ) in
+    let with_front = Component(
+        solid: join(
+            frame: hull,
+            placed: Axle,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.at.offset(
+                        x: $wheel.width / 2.0,
+                        y: $body.depth - $axle.nose,
+                        z: $wheel.radius - $wheel.ride),
+                    placed: placed.at),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    ) in
+    Component(
+        solid: join(
+            frame: with_front,
+            placed: Axle,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.at.offset(
+                        x: $wheel.width / 2.0,
+                        y: $body.depth - $axle.nose - $axle.wheelbase,
+                        z: $wheel.radius - $wheel.ride),
+                    placed: placed.at),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {}
+    )
+
+export(Car)
+```
+
+## Example: a desk set
+
+The desk set is a base, three clips, and a shaker. `Box` and `Cylinder` are written once. The clip row is built by seating one `Clip` onto the next at `$clip.pitch`. The shaker is a cup, a bore, a cap, and a ring of vents, and its sizes are nested groups under `shaker`. The shaker stands beside the base, `$shaker.clearance` past the base's edge.
+
+```parascript
+setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+parameters {
+    base: {
+        width: 80.0,
+        depth: 40.0,
+        height: 8.0
+    },
+    clip: {
+        width: 14.0,
+        depth: 30.0,
+        height: 9.0,
+        pitch: 20.0,
+        bite: 1.0
+    },
+    cable: {
+        radius: 2.5,
+        span: 32.0
+    },
+    shaker: {
+        clearance: 60.0,
+        cup: {
+            radius: 16.0,
+            height: 55.0,
+            bore: 13.0,
+            bore_height: 54.0,
+            floor: 2.0
+        },
+        cap: {
+            radius: 17.0,
+            height: 10.0,
+            lip: 3.0
+        },
+        vent: {
+            radius: 1.3,
+            height: 6.0,
+            from_bottom: 6.0,
+            pitch: 6.0
+        }
+    }
+}
+
+def pi = 3.14159265359
+
+def Box = width => depth => height =>
+    Component(
+        solid: coords =>
+            let top = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
+            let bottom = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => depth,
+                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
+            let front = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
+            let back = Surface2D(
+                max_u: width,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
+            let left = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: 0.0, y: u, z: v)) in
+            let right = Surface2D(
+                max_u: depth,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
+            Solid3D(faces: [
+                    bottom,
+                    top,
+                    back,
+                    front,
+                    left,
+                    right
+                ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            bottom: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: 0.0),
+            top: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: height)
+        }
+    )
+
+def Cylinder = radius => height =>
+    Component(
+        solid: coords =>
+            let Disk = z => Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => radius,
+                formula: u => v => Vector(coords: coords,
+                    x: v * cos(rad: u),
+                    y: v * sin(rad: u),
+                    z: z)) in
+            let wall = Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => height,
+                formula: u => v => Vector(coords: coords,
+                    x: radius * cos(rad: u),
+                    y: radius * sin(rad: u),
+                    z: v)) in
+            let bottom = Disk(z: 0.0) in
+            let top = Disk(z: height) in
+            Solid3D(faces: [
+                    wall,
+                    bottom,
+                    top
+                ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            top: Vector(coords: coords, x: 0.0, y: 0.0, z: height)
+        }
+    )
+
+def Clip =
+    let block = Box(
+        width: $clip.width,
+        depth: $clip.depth,
+        height: $clip.height) in
+    let half = $cable.span / 2.0 in
+    let cable = Component(
+        solid: coords =>
+            let wall = Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => $cable.span,
+                formula: u => v => Vector(coords: coords,
+                    x: $cable.radius * cos(rad: u),
+                    y: 0.0 - half + v,
+                    z: $cable.radius * sin(rad: u))) in
+            let back = Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => $cable.radius,
+                formula: u => v => Vector(coords: coords,
+                    x: v * cos(rad: u),
+                    y: 0.0 - half,
+                    z: v * sin(rad: u))) in
+            let front = Surface2D(
+                max_u: 2.0 * pi,
+                min_v: u => 0.0,
+                max_v: u => $cable.radius,
+                formula: u => v => Vector(coords: coords,
+                    x: v * cos(rad: u),
+                    y: half,
+                    z: v * sin(rad: u))) in
+            Solid3D(faces: [
+                    wall,
+                    back,
+                    front
+                ]),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    ) in
+    Component(
+        solid: join(
+            frame: block,
+            placed: cable,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.corner.offset(
+                        x: $clip.width / 2.0,
+                        y: $clip.depth / 2.0,
+                        z: $clip.height / 2.0),
+                    placed: placed.at),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame - placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
+            at: Vector(coords: coords,
+                x: $clip.width / 2.0,
+                y: $clip.depth / 2.0,
+                z: $clip.height / 2.0)
+        }
+    )
+
+def Shaker =
+    let outer = Cylinder(
+        radius: $shaker.cup.radius,
+        height: $shaker.cup.height) in
+    let bore = Cylinder(
+        radius: $shaker.cup.bore,
+        height: $shaker.cup.bore_height) in
+    let cup = Component(
+        solid: join(
+            frame: outer,
+            placed: bore,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.bottom.offset(
+                        x: 0.0,
+                        y: 0.0,
+                        z: $shaker.cup.floor),
+                    placed: placed.bottom),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame - placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            top: Vector(coords: coords, x: 0.0, y: 0.0, z: $shaker.cup.height)
+        }
+    ) in
+    let shell = Cylinder(
+        radius: $shaker.cap.radius,
+        height: $shaker.cap.height) in
+    let vent = Cylinder(
+        radius: $shaker.vent.radius,
+        height: $shaker.vent.height) in
+    let vents = Component(
+        solid: join(
+            frame: vent,
+            placed: vent,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.bottom.offset(
+                        x: $shaker.vent.pitch,
+                        y: 0.0,
+                        z: 0.0),
+                    placed: placed.bottom),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    ) in
+    let cap = Component(
+        solid: join(
+            frame: shell,
+            placed: vents,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.bottom.offset(
+                        x: 0.0,
+                        y: 0.0,
+                        z: $shaker.vent.from_bottom),
+                    placed: placed.at),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame - placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    ) in
+    Component(
+        solid: join(
+            frame: cup,
+            placed: cap,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.top.offset(
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0 - $shaker.cap.lip),
+                    placed: placed.bottom),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    )
+
+def DeskSet =
+    let gap = $clip.pitch - $clip.width in
+    let row = $clip.width * 3.0 + gap * 2.0 in
+    let margin = ($base.width - row) / 2.0 in
+    let base = Box(
+        width: $base.width,
+        depth: $base.depth,
+        height: $base.height) in
+    let pair = Component(
+        solid: join(
+            frame: Clip,
+            placed: Clip,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.at.offset(
+                        x: $clip.pitch,
+                        y: 0.0,
+                        z: 0.0),
+                    placed: placed.at),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    ) in
+    let clips = Component(
+        solid: join(
+            frame: pair,
+            placed: Clip,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.corner.offset(
+                        x: $clip.pitch * 2.0,
+                        y: 0.0,
+                        z: 0.0),
+                    placed: placed.corner),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    ) in
+    let organizer = Component(
+        solid: join(
+            frame: base,
+            placed: clips,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.corner.offset(
+                        x: margin,
+                        y: $base.depth / 2.0,
+                        z: $base.height - $clip.bite),
+                    placed: placed.corner.offset(
+                        x: 0.0,
+                        y: $clip.depth / 2.0,
+                        z: 0.0)),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {
+            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+        }
+    ) in
+    Component(
+        solid: join(
+            frame: organizer,
+            placed: Shaker,
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.up,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.corner.offset(
+                        x: $base.width + $shaker.cup.radius + $shaker.clearance,
+                        y: $base.depth / 2.0,
+                        z: 0.0),
+                    placed: placed.at),
+                rotation: meet(
+                    frame: frame.right,
+                    placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => {}
+    )
+
+export(DeskSet)
 ```
 
 ## Forms the compiler rejects

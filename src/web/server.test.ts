@@ -106,6 +106,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(landingHtml, /href="\/language\.md"/);
         assert.match(landingHtml, /href="\/workspace"/);
         assert.match(landingHtml, /href="\/llms\.txt"/);
+        assert.match(landingHtml, /href="\/prompt"/);
 
         const page = await fetch(`${base}/workspace`);
         assert.equal(page.status, 200);
@@ -122,6 +123,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(html, /touch-action:\s*none/);
         assert.match(html, /id="solid-sides" type="checkbox" checked/);
         assert.match(html, /href="\/language"/);
+        assert.match(html, /href="\/prompt"/);
 
         const reference = await fetch(`${base}/language`);
         assert.equal(reference.status, 200);
@@ -131,33 +133,57 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(referenceHtml, /href="\/site\.css"/);
         assert.match(referenceHtml, /<h2>ParaScript language<\/h2>/);
         assert.match(referenceHtml, /A second copy of the same faces is a mistake/);
-        assert.match(referenceHtml, /export\(Brick\(width: 40\.0, depth: 30\.0, height: 20\.0\)\)/);
-        assert.match(referenceHtml, /export\(HollowBox\(w: 100\.0, d: 50\.0, h: 30\.0, wall: 3\.0\)\)/);
         assert.match(referenceHtml, /export\(Sphere\(radius: 25\.0\)\)/);
+        assert.match(referenceHtml, /export\(HollowBox\)/);
         assert.match(referenceHtml, /export\(Broom\)/);
-        assert.match(referenceHtml, /export\(patterned_plate\(/);
-        assert.equal(referenceHtml.match(/Open in workspace/g)?.length, 5);
-        assert.match(referenceHtml, /href="\/workspace\?example=closed-box"/);
-        assert.match(referenceHtml, /href="\/workspace\?example=box-with-a-cavity"/);
+        assert.match(referenceHtml, /PlateWithKnobs\(coords: coords\)/);
+        assert.equal(referenceHtml.match(/Open in workspace/g)?.length, 8);
         assert.match(referenceHtml, /href="\/workspace\?example=sphere"/);
+        assert.match(referenceHtml, /href="\/workspace\?example=box"/);
         assert.match(referenceHtml, /href="\/workspace\?example=broom"/);
-        assert.match(referenceHtml, /href="\/workspace\?example=patterned-plate"/);
+        assert.match(referenceHtml, /href="\/workspace\?example=plate"/);
+        assert.match(referenceHtml, /href="\/workspace\?example=screw"/);
+        assert.match(referenceHtml, /href="\/workspace\?example=remote"/);
+        assert.match(referenceHtml, /href="\/workspace\?example=car"/);
+        assert.match(referenceHtml, /href="\/workspace\?example=desk-set"/);
         assert.match(referenceHtml, /The handle, the ferrule, and the hole through the handle are three calls/);
         assert.match(referenceHtml, /Tube\(coords: coords, radius: radius, height: height\)/);
-        assert.match(referenceHtml, /Box\(width: size, depth: size, height: thickness\)/);
+        assert.match(referenceHtml, /Box\(width: \$plate\.size, depth: \$plate\.size, height: \$plate\.thickness\)/);
         assert.match(referenceHtml, /Disk\(coords: coords, radius: radius, z: 0\.0\)/);
         assert.match(referenceHtml, /Disk\(coords: coords, radius: radius, z: height\)/);
         assert.match(referenceHtml, /Cylinder\(\s*radius: \$handle\.radius,\s*height: \$handle\.length\)/);
         assert.match(referenceHtml, /Cylinder\(\s*radius: \$hang\.radius,\s*height: \$handle\.radius \* 2\.0 \+ 8\.0\)/);
         assert.match(referenceHtml, /Cylinder\(\s*radius: \$ferrule\.radius,\s*height: \$ferrule\.height\)/);
         assert.equal(referenceHtml.includes("<script"), false);
+        assert.match(referenceHtml, /href="\/prompt"/);
+
+        const promptPage = await fetch(`${base}/prompt`);
+        assert.equal(promptPage.status, 200);
+        assert.match(promptPage.headers.get("content-type") ?? "", /text\/html/);
+        assert.equal(promptPage.headers.get("cache-control"), "no-store");
+        const promptHtml = await promptPage.text();
+        assert.match(promptHtml, /<title>ParaScript prompt<\/title>/);
+        assert.match(promptHtml, /<textarea id="model-prompt"/);
+        assert.match(promptHtml, />Copy prompt</);
+        assert.match(promptHtml, /ParaScript is the language you use to describe one closed solid/);
+        assert.match(promptHtml, /That is what the language is for/);
+        assert.match(promptHtml, /Guidance for a language model/);
+        assert.match(promptHtml, /export\(Sphere\(radius: 25\.0\)\)/);
+        assert.match(promptHtml, /href="\/workspace"/);
+        const promptField = promptHtml.match(/<textarea id="model-prompt"[^>]*>([\s\S]*?)<\/textarea>/);
+        assert.match(promptField?.[1] ?? "", /ParaScript is the language you use to describe one closed solid/);
+        assert.equal((promptField?.[1] ?? "").includes("<script"), false);
+
+        const promptHead = await fetch(`${base}/prompt`, { method: "HEAD" });
+        assert.equal(promptHead.status, 200);
+        assert.equal(await promptHead.text(), "");
 
         const markdown = await fetch(`${base}/language.md`);
         assert.equal(markdown.status, 200);
         assert.match(markdown.headers.get("content-type") ?? "", /text\/markdown/);
         const markdownText = await markdown.text();
         assert.match(markdownText, /shift\(d: 3\.0\) >> scale\(k: 2\.0\)/);
-        assert.match(markdownText, /def patterned_plate = cut_holes >> add_pins/);
+        assert.match(markdownText, /def place_components = host => points => place => combine => fold\(/);
         assert.match(markdownText, /let bottom = Disk\(coords: coords, radius: radius, z: 0\.0\) in/);
         assert.match(markdownText, /\[1\.0, 2\.0, 3\.0\] \|> map\(f: item => item \* 2\.0\)/);
         assert.match(markdownText, /`\|>` pipes a value into a function/);
@@ -166,9 +192,9 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(markdownText, /T => T => number/);
         assert.match(markdownText, /parameters \{/);
         assert.match(markdownText, /\$plate\.size/);
-        assert.match(markdownText, /The patterned plate is the form to copy/);
-        assert.match(markdownText, /subtract_cylinders` cuts that list/);
-        assert.match(markdownText, /CylinderAt/);
+        assert.match(markdownText, /The plate is the form to copy/);
+        assert.match(markdownText, /place_components` seats one component/);
+        assert.match(markdownText, /iso_4017/);
         assert.match(markdownText, /```parascript/);
         assert.match(markdownText, /Surface2D/);
 
@@ -177,13 +203,14 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(index.headers.get("content-type") ?? "", /text\/plain/);
         const indexText = await index.text();
         assert.match(indexText, /\/language\.md/);
+        assert.match(indexText, /\/prompt/);
         assert.match(indexText, /three calls to one/);
         assert.match(indexText, /Guidance for a language model/);
-        assert.match(indexText, /plate\.origin/);
+        assert.match(indexText, /\$plate\.size/);
         assert.match(indexText, /## Lessons/);
-        assert.match(indexText, /rectangular_pattern/);
+        assert.match(indexText, /vector_grid/);
         assert.match(indexText, /parameters/);
-        assert.match(indexText, /subtract_cylinders/);
+        assert.match(indexText, /place_components/);
 
         const style = await fetch(`${base}/site.css`);
         assert.equal(style.status, 200);

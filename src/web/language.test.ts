@@ -8,13 +8,10 @@ import { evaluateModelModule, modelMesh } from "./model.js";
 test("language reference examples compile and mesh", async () => {
     const markdown = readFileSync(fileURLToPath(new URL("../../src/web/language.md", import.meta.url)), "utf8");
     const examples = [...markdown.matchAll(/```parascript\n([\s\S]*?)```/g)].map((match) => match[1] ?? "");
-    const sphere = readFileSync(fileURLToPath(new URL("../../examples/sphere.psai", import.meta.url)), "utf8");
-    const broom = readFileSync(fileURLToPath(new URL("../../examples/broom.psai", import.meta.url)), "utf8");
-    const plate = readFileSync(fileURLToPath(new URL("../../examples/plate.psai", import.meta.url)), "utf8");
-    assert.equal(examples.length, 5);
-    assert.ok(examples.includes(sphere));
-    assert.ok(examples.includes(broom));
-    assert.ok(examples.includes(plate));
+    const files = ["sphere", "box", "broom", "plate", "screw", "remote", "car", "desk-set"];
+    const scripts = files.map((name) => readFileSync(fileURLToPath(new URL(`../../examples/${name}.psai`, import.meta.url)), "utf8"));
+    assert.equal(examples.length, scripts.length);
+    for (const script of scripts) assert.ok(examples.includes(script));
     for (const source of examples) {
         const result = compileParaScriptSource(source);
         assert.equal(result.success, true, result.errorMessage ?? source.slice(0, 120));

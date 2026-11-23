@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile, stat } from "node:fs/promises";
 import { resolve, sep, extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parascriptExamples, renderLanguagePage } from "./markdown.js";
+import { modelPrompt, parascriptExamples, renderLanguagePage, renderPromptPage } from "./markdown.js";
 
 const projectRoot = fileURLToPath(new URL("../..", import.meta.url));
 const distRoot = resolve(projectRoot, "dist");
@@ -122,6 +122,23 @@ async function sendWorkspaceExample(response: ServerResponse, method: string, ex
     response.end(method === "HEAD" ? undefined : body);
 }
 
+async function sendPrompt(response: ServerResponse, method: string): Promise<void> {
+    let markdown: string;
+    try {
+        markdown = await readFile(webFile("language.md"), "utf8");
+    } catch {
+        sendText(response, 500, "Server error.");
+        return;
+    }
+    const body = Buffer.from(renderPromptPage(modelPrompt(markdown)));
+    response.writeHead(200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": body.length,
+        "Cache-Control": "no-store"
+    });
+    response.end(method === "HEAD" ? undefined : body);
+}
+
 async function sendLanguage(response: ServerResponse, method: string): Promise<void> {
     let markdown: string;
     try {
@@ -148,6 +165,10 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
     const pathname = requestPathname(request.url ?? "/");
     if (pathname === "/language") {
         await sendLanguage(response, method);
+        return;
+    }
+    if (pathname === "/prompt") {
+        await sendPrompt(response, method);
         return;
     }
     const exampleId = pathname === "/workspace" || pathname === "/index.html"

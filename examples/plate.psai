@@ -4,7 +4,7 @@ setup {
 }
 
 // The model's sizes, grouped by the part they describe.
-// cut_holes reads $holes. add_pins reads $pins. patterned_plate is cut_holes >> add_pins.
+// PlateWithHoles reads $holes. PlateWithKnobs reads $pins.
 parameters {
     plate: {
         size: 100.0,
