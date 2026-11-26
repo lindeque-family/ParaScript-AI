@@ -14,6 +14,7 @@ function requireElement<T extends Element>(id: string, ctor: new () => T): T {
 const canvas = requireElement("manifold-canvas", HTMLCanvasElement);
 const statusOverlay = requireElement("compiler-status", HTMLElement);
 const compileBtn = requireElement("compile-btn", HTMLButtonElement);
+const stlBtn = requireElement("stl-btn", HTMLButtonElement);
 const codeInput = requireElement("code-input", HTMLTextAreaElement);
 const solidSides = requireElement("solid-sides", HTMLInputElement);
 const app = requireElement("app-container", HTMLElement);
@@ -146,8 +147,40 @@ async function runSolver(): Promise<void> {
     }
 }
 
+async function downloadStl(): Promise<void> {
+    hideStatus();
+    stlBtn.disabled = true;
+    try {
+        const response = await fetch("/stl", {
+            method: "POST",
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+            body: codeInput.value
+        });
+        if (!response.ok) {
+            showError((await response.text()) || "STL export failed.");
+            return;
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "solid.stl";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err: unknown) {
+        showError(err instanceof Error ? err.message : "Download failed.");
+    } finally {
+        stlBtn.disabled = false;
+    }
+}
+
 compileBtn.addEventListener("click", () => {
     void runSolver();
+});
+stlBtn.addEventListener("click", () => {
+    void downloadStl();
 });
 viewport.resize();
 requestAnimationFrame(() => viewport.resize());

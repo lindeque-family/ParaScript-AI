@@ -26,8 +26,9 @@
         #gesture-hint { display: none; position: absolute; top: 10px; left: 12px; z-index: 2; margin: 0; color: #858585; font-size: 12px; pointer-events: none; }
         #compiler-status { position: absolute; bottom: 20px; left: 20px; padding: 12px 20px; background: rgba(30, 30, 30, 0.85); border-radius: 6px; border: 1px solid #4e4e4e; font-size: 13px; font-family: monospace; max-width: 80%; pointer-events: none; z-index: 10; }
         .status-error { color: #f48771; border-color: #5a322a !important; background: rgba(45, 25, 22, 0.9) !important; }
-        #compile-btn { background: #007acc; color: white; border: none; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
-        #compile-btn:hover { background: #0062b3; }
+        #compile-btn, #stl-btn { background: #007acc; color: white; border: none; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
+        #compile-btn:hover, #stl-btn:hover { background: #0062b3; }
+        #compile-btn:disabled, #stl-btn:disabled { opacity: 0.55; cursor: default; }
         .solid-toggle { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; color: #cccccc; cursor: pointer; user-select: none; }
         .solid-toggle input { width: 14px; height: 14px; margin: 0; accent-color: #007acc; cursor: pointer; }
         #manifold-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
@@ -40,8 +41,8 @@
             #pane-splitter::before { left: 0; right: 0; top: -14px; bottom: -14px; }
             #pane-splitter::after { width: 36px; height: 4px; }
             #code-input { font-size: 16px; padding: 12px; }
-            #compile-btn, .solid-toggle { min-height: 44px; }
-            #compile-btn { padding: 8px 14px; }
+            #compile-btn, #stl-btn, .solid-toggle { min-height: 44px; }
+            #compile-btn, #stl-btn { padding: 8px 14px; }
             .header-file { display: none; }
             #compiler-status { left: 12px; right: 12px; bottom: 12px; max-width: none; }
             #gesture-hint { display: block; }
@@ -54,7 +55,7 @@
         <div id="editor-pane">
             <div class="pane-header">
                 <span class="header-title"><a href="/">ParaScript</a><span class="header-file">workspace.para</span></span>
-                <span class="header-links"><a href="/language">Language</a><button id="compile-btn">RUN SOLVER</button></span>
+                <span class="header-links"><a href="/language">Language</a><button id="compile-btn">RUN SOLVER</button><button id="stl-btn">DOWNLOAD STL</button></span>
             </div>
             <textarea id="code-input" spellcheck="false">setup {
     units: "mm",

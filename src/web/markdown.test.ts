@@ -56,6 +56,7 @@ test("the language page is a document with the rendered reference", () => {
     assert.match(page, /<h2>ParaScript language<\/h2>/);
     assert.match(page, /<a href="\/workspace">the workspace<\/a>/);
     assert.equal(page.includes(">Reference<"), false);
+    assert.equal(page.includes("Read the rules"), false);
     assert.equal(page.includes("For models"), false);
     assert.equal(page.includes("/language.md"), false);
     assert.equal(page.includes('href="/prompt"'), false);

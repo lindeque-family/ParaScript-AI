@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { compileParaScriptSource } from "../parascript/compile.js";
 import { evaluateModelModule, modelMesh } from "./model.js";
 import { listenConfigFromEnv, resolveRequestFile, startServer } from "./server.js";
+import { meshToStl } from "./stl.js";
 
 test("resolveRequestFile serves the portal pages and compiled modules", () => {
     assert.equal(resolveRequestFile("/")?.endsWith("/src/web/home.html"), true);
@@ -165,6 +166,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(html, /cursor:\s*col-resize/);
         assert.match(html, /cursor:\s*row-resize/);
         assert.match(html, /id="compiler-status" hidden/);
+        assert.match(html, /id="stl-btn">DOWNLOAD STL</);
         assert.equal(html.includes("Compiled"), false);
         assert.match(html, /max-width:\s*800px/);
         assert.match(html, /touch-action:\s*none/);
@@ -208,6 +210,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.equal(referenceHtml.includes("<script"), false);
         assert.equal(referenceHtml.includes('href="/prompt"'), false);
         assert.equal(referenceHtml.includes(">Reference<"), false);
+        assert.equal(referenceHtml.includes("Read the rules"), false);
         assert.equal(referenceHtml.includes("For models"), false);
         assert.equal(referenceHtml.includes("/language.md"), false);
         assert.match(referenceHtml, /How to write a solid/);
@@ -280,6 +283,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(moduleResponse.headers.get("content-type") ?? "", /javascript/);
         const moduleText = await moduleResponse.text();
         assert.match(moduleText, /compileParaScriptSource/);
+        assert.match(moduleText, /fetch\("\/stl"/);
         assert.match(moduleText, /solid-sides/);
         assert.match(moduleText, /setSolid\(solidSides\.checked\)/);
         assert.match(moduleText, /setUpAxis/);
@@ -295,6 +299,69 @@ test("server returns the workspace page and blocks traversal", async () => {
 
         const posted = await fetch(`${base}/`, { method: "POST" });
         assert.equal(posted.status, 405);
+    } finally {
+        server.closeAllConnections();
+        server.close();
+        await once(server, "close");
+    }
+});
+
+const squareScript = `setup {
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+def Square = Component(
+    solid: coords => Solid3D(faces: [
+        Surface2D(
+            max_u: 1.0,
+            min_v: u => 0.0,
+            max_v: u => 1.0,
+            formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)
+        )
+    ]),
+    expose: coords => {}
+)
+
+export(Square)
+`;
+
+test("POST /stl returns the mesh as a binary STL", async () => {
+    const server = startServer(0);
+    await once(server, "listening");
+    const address = server.address();
+    const port = typeof address === "object" && address !== null ? address.port : 0;
+    const base = `http://127.0.0.1:${port}`;
+    try {
+        const response = await fetch(`${base}/stl`, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+            body: squareScript
+        });
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get("content-type") ?? "", /model\/stl/);
+        assert.match(response.headers.get("content-disposition") ?? "", /attachment;\s*filename="solid\.stl"/);
+        const body = Buffer.from(await response.arrayBuffer());
+        const compiled = compileParaScriptSource(squareScript);
+        const expected = meshToStl(modelMesh(await evaluateModelModule(compiled.javascriptCode ?? "")));
+        assert.deepEqual(body, expected);
+        assert.ok(body.readUInt32LE(80) > 0);
+
+        const refused = await fetch(`${base}/stl`, { method: "POST", body: "export(1.0)\n" });
+        assert.equal(refused.status, 400);
+        assert.match(refused.headers.get("content-type") ?? "", /text\/plain/);
+        const refusedText = await refused.text();
+        assert.equal(refusedText.length > 0, true);
+        assert.equal(refusedText.startsWith("solid"), false);
+
+        const empty = await fetch(`${base}/stl`, { method: "POST", body: "   " });
+        assert.equal(empty.status, 400);
+
+        const getStl = await fetch(`${base}/stl`);
+        assert.equal(getStl.status, 405);
+
+        const huge = await fetch(`${base}/stl`, { method: "POST", body: "x".repeat(100_000_001) });
+        assert.equal(huge.status, 413);
     } finally {
         server.closeAllConnections();
         server.close();

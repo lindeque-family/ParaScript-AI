@@ -307,7 +307,6 @@ export function renderLanguagePage(markdown: string): string {
 <p class="lede">ParaScript describes a closed solid as the formulas of its faces. Each part keeps its own coordinates and publishes the anchors it is willing to share. A join lines those anchors up, then adds the part or cuts it away. The workspace compiles the script in your browser and draws the result. This page is the language and the standard library: the rules below, and the names a script can call without defining them.</p>
 <p class="actions">
 <a class="primary" href="/workspace">Open the workspace</a>
-<a class="secondary" href="#reference">Read the rules</a>
 </p>
 </div>
 </section>

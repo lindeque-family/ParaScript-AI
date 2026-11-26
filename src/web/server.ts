@@ -2,7 +2,12 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile, stat } from "node:fs/promises";
 import { resolve, sep, extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { compileParaScriptSource } from "../parascript/compile.js";
 import { parascriptExamples, renderLanguagePage } from "./markdown.js";
+import { evaluateModelModule, modelMesh } from "./model.js";
+import { meshToStl } from "./stl.js";
+
+const maxScriptBytes = 100_000_000;
 
 const projectRoot = fileURLToPath(new URL("../..", import.meta.url));
 const distRoot = resolve(projectRoot, "dist");
@@ -160,13 +165,96 @@ async function sendLanguage(response: ServerResponse, method: string): Promise<v
     response.end(method === "HEAD" ? undefined : body);
 }
 
+class BodyLimitError extends Error {
+    constructor() {
+        super("The script is too large.");
+        this.name = "BodyLimitError";
+    }
+}
+
+function readBody(request: IncomingMessage, limit: number): Promise<Buffer> {
+    return new Promise((resolveBody, reject) => {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        let settled = false;
+        const fail = (error: Error) => {
+            if (settled) return;
+            settled = true;
+            reject(error);
+        };
+        request.on("data", (chunk: Buffer | string) => {
+            if (settled) return;
+            const buf = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+            size += buf.length;
+            if (size > limit) {
+                request.pause();
+                fail(new BodyLimitError());
+                return;
+            }
+            chunks.push(buf);
+        });
+        request.on("end", () => {
+            if (settled) return;
+            settled = true;
+            resolveBody(Buffer.concat(chunks));
+        });
+        request.on("error", (error) => fail(error));
+    });
+}
+
+async function sendStl(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    let source: string;
+    try {
+        source = (await readBody(request, maxScriptBytes)).toString("utf8");
+    } catch (err: unknown) {
+        const tooLarge = err instanceof BodyLimitError;
+        sendText(response, tooLarge ? 413 : 400, err instanceof Error ? err.message : "Could not read the script.");
+        request.destroy();
+        return;
+    }
+    if (source.trim() === "") {
+        sendText(response, 400, "The script is empty.");
+        return;
+    }
+    const compiled = compileParaScriptSource(source);
+    if (!compiled.success || compiled.javascriptCode === undefined) {
+        sendText(response, 400, compiled.errorMessage ?? "Compilation failed.");
+        return;
+    }
+    try {
+        const mesh = modelMesh(await evaluateModelModule(compiled.javascriptCode));
+        const stl = meshToStl(mesh);
+        if (stl.readUInt32LE(80) === 0) {
+            sendText(response, 400, "The script did not produce a solid.");
+            return;
+        }
+        response.writeHead(200, {
+            "Content-Type": "model/stl",
+            "Content-Length": stl.length,
+            "Content-Disposition": "attachment; filename=\"solid.stl\"",
+            "Cache-Control": "no-store"
+        });
+        response.end(stl);
+    } catch (err: unknown) {
+        sendText(response, 400, err instanceof Error ? err.message : "Model execution failed.");
+    }
+}
+
 async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const method = request.method ?? "GET";
+    const pathname = requestPathname(request.url ?? "/");
+    if (pathname === "/stl") {
+        if (method !== "POST") {
+            sendText(response, 405, "Method not allowed.");
+            return;
+        }
+        await sendStl(request, response);
+        return;
+    }
     if (method !== "GET" && method !== "HEAD") {
         sendText(response, 405, "Method not allowed.");
         return;
     }
-    const pathname = requestPathname(request.url ?? "/");
     if (pathname === "/language") {
         await sendLanguage(response, method);
         return;
