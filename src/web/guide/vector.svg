@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340">
+  <rect width="800" height="340" fill="#161616"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 1.2 L9 5 L0 8.8 Z" fill="#f6d45a"/>
+    </marker>
+  </defs>
+  <circle cx="360" cy="200" r="7" fill="#f6d45a"/>
+  <line x1="360" y1="200" x2="600" y2="200" stroke="#f6d45a" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="616" y="208" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="28" font-weight="700">x</text>
+  <line x1="360" y1="200" x2="230" y2="276" stroke="#f6d45a" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="188" y="308" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="28" font-weight="700">y</text>
+  <line x1="360" y1="200" x2="360" y2="56" stroke="#f6d45a" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="376" y="48" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="28" font-weight="700">z</text>
+</svg>

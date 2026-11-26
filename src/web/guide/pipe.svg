@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 280">
+  <rect width="800" height="280" fill="#161616"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 1.2 L9 5 L0 8.8 Z" fill="#79c0ef"/>
+    </marker>
+  </defs>
+  <circle cx="90" cy="110" r="32" fill="#1e1e1e" stroke="#b5cea8" stroke-width="2"/>
+  <circle cx="170" cy="110" r="32" fill="#1e1e1e" stroke="#b5cea8" stroke-width="2"/>
+  <circle cx="250" cy="110" r="32" fill="#1e1e1e" stroke="#b5cea8" stroke-width="2"/>
+  <text x="90" y="118" text-anchor="middle" fill="#b5cea8" font-family="Consolas, monospace" font-size="22">1</text>
+  <text x="170" y="118" text-anchor="middle" fill="#b5cea8" font-family="Consolas, monospace" font-size="22">2</text>
+  <text x="250" y="118" text-anchor="middle" fill="#b5cea8" font-family="Consolas, monospace" font-size="22">3</text>
+  <line x1="310" y1="110" x2="470" y2="110" stroke="#79c0ef" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="390" y="92" text-anchor="middle" fill="#dcdcaa" font-family="Consolas, monospace" font-size="20">|&gt; map</text>
+  <circle cx="540" cy="110" r="32" fill="#007acc" stroke="#79c0ef" stroke-width="2"/>
+  <circle cx="620" cy="110" r="32" fill="#007acc" stroke="#79c0ef" stroke-width="2"/>
+  <circle cx="700" cy="110" r="32" fill="#007acc" stroke="#79c0ef" stroke-width="2"/>
+  <text x="540" y="118" text-anchor="middle" fill="#ffffff" font-family="Consolas, monospace" font-size="22">2</text>
+  <text x="620" y="118" text-anchor="middle" fill="#ffffff" font-family="Consolas, monospace" font-size="22">4</text>
+  <text x="700" y="118" text-anchor="middle" fill="#ffffff" font-family="Consolas, monospace" font-size="22">6</text>
+  <text x="400" y="200" text-anchor="middle" fill="#d4d4d4" font-family="Consolas, monospace" font-size="20">item =&gt; item * 2.0</text>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 280">
+  <rect width="800" height="280" fill="#161616"/>
+  <text x="130" y="64" text-anchor="middle" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="18" font-weight="700">head</text>
+  <rect x="50" y="84" width="160" height="88" rx="14" fill="#1e1e1e" stroke="#f6d45a" stroke-width="2"/>
+  <text x="130" y="138" text-anchor="middle" fill="#b5cea8" font-family="Consolas, monospace" font-size="28">1.0</text>
+  <text x="250" y="140" text-anchor="middle" fill="#79c0ef" font-family="Consolas, monospace" font-size="32">::</text>
+  <text x="530" y="64" text-anchor="middle" fill="#9cdcfe" font-family="Segoe UI, Helvetica, sans-serif" font-size="18" font-weight="700">tail</text>
+  <rect x="310" y="84" width="140" height="88" rx="14" fill="#1e1e1e" stroke="#3c3c3c" stroke-width="2"/>
+  <rect x="466" y="84" width="140" height="88" rx="14" fill="#1e1e1e" stroke="#3c3c3c" stroke-width="2"/>
+  <rect x="622" y="84" width="140" height="88" rx="14" fill="#1e1e1e" stroke="#3c3c3c" stroke-width="2"/>
+  <text x="380" y="138" text-anchor="middle" fill="#b5cea8" font-family="Consolas, monospace" font-size="28">2.0</text>
+  <text x="536" y="138" text-anchor="middle" fill="#b5cea8" font-family="Consolas, monospace" font-size="28">3.0</text>
+  <text x="692" y="138" text-anchor="middle" fill="#6a9955" font-family="Consolas, monospace" font-size="28">…</text>
+  <text x="400" y="220" text-anchor="middle" fill="#d4d4d4" font-family="Consolas, monospace" font-size="20">head :: tail</text>
+</svg>

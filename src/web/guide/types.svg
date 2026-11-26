@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 280">
+  <rect width="800" height="280" fill="#161616"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 1.2 L9 5 L0 8.8 Z" fill="#79c0ef"/>
+    </marker>
+  </defs>
+  <rect x="48" y="78" width="160" height="72" rx="14" fill="#1e1e1e" stroke="#9cdcfe" stroke-width="2"/>
+  <rect x="320" y="78" width="160" height="72" rx="14" fill="#1e1e1e" stroke="#9cdcfe" stroke-width="2"/>
+  <rect x="592" y="78" width="160" height="72" rx="14" fill="#15202b" stroke="#b5cea8" stroke-width="2"/>
+  <text x="128" y="124" text-anchor="middle" fill="#9cdcfe" font-family="Consolas, monospace" font-size="32">T</text>
+  <text x="400" y="124" text-anchor="middle" fill="#9cdcfe" font-family="Consolas, monospace" font-size="32">T</text>
+  <text x="672" y="124" text-anchor="middle" fill="#b5cea8" font-family="Consolas, monospace" font-size="28">number</text>
+  <line x1="220" y1="114" x2="306" y2="114" stroke="#79c0ef" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="492" y1="114" x2="578" y2="114" stroke="#79c0ef" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="400" y="200" text-anchor="middle" fill="#d4d4d4" font-family="Consolas, monospace" font-size="22">T =&gt; T =&gt; number</text>
+</svg>

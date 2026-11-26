@@ -6,6 +6,91 @@ function escapeHtml(value: string): string {
         .replaceAll("\"", "&quot;");
 }
 
+const paraScriptKeywords = new Set([
+    "setup", "parameters", "param", "def", "fn", "export", "return", "true", "false", "match", "let", "in"
+]);
+
+/** Color a script the way the homepage sphere is colored. */
+export function highlightParaScript(source: string): string {
+    const identStart = /[A-Za-z_]/;
+    const identChar = /[A-Za-z0-9_]/;
+    let html = "";
+    let index = 0;
+    let pendingName = false;
+    while (index < source.length) {
+        const current = source[index] ?? "";
+        if (current === "/" && source[index + 1] === "/") {
+            const end = source.indexOf("\n", index);
+            const stop = end === -1 ? source.length : end;
+            html += `<span class="cmt">${escapeHtml(source.slice(index, stop))}</span>`;
+            index = stop;
+            pendingName = false;
+            continue;
+        }
+        if (current === "\"") {
+            let cursor = index + 1;
+            while (cursor < source.length && source[cursor] !== "\"") {
+                if (source[cursor] === "\\") cursor += 1;
+                cursor += 1;
+            }
+            if (cursor < source.length) cursor += 1;
+            html += `<span class="str">${escapeHtml(source.slice(index, cursor))}</span>`;
+            index = cursor;
+            pendingName = false;
+            continue;
+        }
+        if (current === "$" && identStart.test(source[index + 1] ?? "")) {
+            let cursor = index + 1;
+            while (cursor < source.length && identChar.test(source[cursor] ?? "")) cursor += 1;
+            html += `<span class="name">${escapeHtml(source.slice(index, cursor))}</span>`;
+            index = cursor;
+            pendingName = false;
+            continue;
+        }
+        if ((current >= "0" && current <= "9") || (current === "." && /[0-9]/.test(source[index + 1] ?? ""))) {
+            let cursor = index + 1;
+            while (cursor < source.length && /[0-9.]/.test(source[cursor] ?? "")) cursor += 1;
+            html += `<span class="num">${escapeHtml(source.slice(index, cursor))}</span>`;
+            index = cursor;
+            pendingName = false;
+            continue;
+        }
+        if (current === "." && identStart.test(source[index + 1] ?? "")) {
+            let cursor = index + 1;
+            while (cursor < source.length && identChar.test(source[cursor] ?? "")) cursor += 1;
+            html += `.<span class="name">${escapeHtml(source.slice(index + 1, cursor))}</span>`;
+            index = cursor;
+            pendingName = false;
+            continue;
+        }
+        if (identStart.test(current)) {
+            let cursor = index + 1;
+            while (cursor < source.length && identChar.test(source[cursor] ?? "")) cursor += 1;
+            const word = source.slice(index, cursor);
+            let look = cursor;
+            while (look < source.length && (source[look] === " " || source[look] === "\t")) look += 1;
+            const next = source[look] ?? "";
+            const kind = paraScriptKeywords.has(word)
+                ? "kw"
+                : pendingName
+                    ? "fn"
+                    : next === "("
+                        ? "fn"
+                        : next === ":"
+                            ? "name"
+                            : "";
+            html += kind === "" ? escapeHtml(word) : `<span class="${kind}">${escapeHtml(word)}</span>`;
+            pendingName = word === "def" || word === "param";
+            index = cursor;
+            continue;
+        }
+        html += escapeHtml(current);
+        if (current !== " " && current !== "\t" && current !== "\n" && current !== "\r") pendingName = false;
+        index += 1;
+    }
+    return html;
+}
+
 function isSafeHref(href: string): boolean {
     if (href.startsWith("/") && !href.startsWith("//")) return true;
     return href.startsWith("https://") || href.startsWith("http://");
@@ -132,7 +217,8 @@ export function renderMarkdown(source: string): string {
                 index += 1;
             }
             if (index < lines.length) index += 1;
-            const code = `<pre><code>${escapeHtml(body.join("\n"))}</code></pre>`;
+            const raw = body.join("\n");
+            const code = `<pre><code>${lang === "parascript" || lang === "text" ? highlightParaScript(raw) : escapeHtml(raw)}</code></pre>`;
             if (lang === "parascript") {
                 const id = examples[exampleIndex]?.id ?? "example";
                 exampleIndex += 1;
@@ -158,10 +244,29 @@ export function renderMarkdown(source: string): string {
             blocks.push(`<ul>${items.join("")}</ul>`);
             continue;
         }
+        if (line.startsWith("> ")) {
+            const note = line.slice(2);
+            const remember = note.startsWith("Remember: ");
+            const body = remember
+                ? `<strong>Remember.</strong> ${renderInline(note.slice("Remember: ".length))}`
+                : renderInline(note);
+            blocks.push(`<aside class="remember"><p>${body}</p></aside>`);
+            index += 1;
+            continue;
+        }
+        const figure = /^!\[([^\]]*)\]\((\/guide\/[a-z0-9-]+\.svg)\)$/.exec(line);
+        if (figure) {
+            const alt = escapeHtml(figure[1] ?? "");
+            const src = escapeHtml(figure[2] ?? "");
+            blocks.push(`<figure class="guide"><img src="${src}" alt="${alt}"><figcaption>${alt}</figcaption></figure>`);
+            index += 1;
+            continue;
+        }
         const paragraph: string[] = [];
         while (index < lines.length) {
             const current = lines[index] ?? "";
-            if (current.trim() === "" || current.startsWith("```") || current.startsWith("- ") || /^#{1,3} /.test(current)) break;
+            const figureLine = /^!\[([^\]]*)\]\(\/guide\/[a-z0-9-]+\.svg\)$/.test(current);
+            if (current.trim() === "" || current.startsWith("```") || current.startsWith("- ") || current.startsWith("> ") || figureLine || /^#{1,3} /.test(current)) break;
             paragraph.push(current);
             index += 1;
         }
@@ -185,24 +290,21 @@ export function renderLanguagePage(markdown: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ParaScript language</title>
 <meta name="description" content="ParaScript writes a solid as formulas, seats the parts by their anchors, and draws the result in the browser.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/site.css">
-<link rel="alternate" type="text/markdown" href="/language.md" title="ParaScript language reference">
 </head>
 <body>
 <header class="site">
 <a class="brand" href="/">ParaScript</a>
 <nav>
 <a href="/workspace">Workspace</a>
-<a href="/prompt">Prompt</a>
-<a href="#reference">Reference</a>
-<a href="/language.md">For models</a>
 </nav>
 </header>
 <section class="hero">
 <div class="hero-copy">
 <p class="eyebrow">The language</p>
 <h1>Write the shape. The solid follows.</h1>
-<p class="lede">ParaScript describes a closed solid as the formulas of its faces. Each part keeps its own coordinates and publishes the anchors it is willing to share. A join lines those anchors up, then adds the part or cuts it away. The workspace compiles the script in your browser and draws the result.</p>
+<p class="lede">ParaScript describes a closed solid as the formulas of its faces. Each part keeps its own coordinates and publishes the anchors it is willing to share. A join lines those anchors up, then adds the part or cuts it away. The workspace compiles the script in your browser and draws the result. This page is the language and the standard library: the rules below, and the names a script can call without defining them.</p>
 <p class="actions">
 <a class="primary" href="/workspace">Open the workspace</a>
 <a class="secondary" href="#reference">Read the rules</a>
@@ -226,73 +328,6 @@ export function renderLanguagePage(markdown: string): string {
 <article id="reference" class="reference">
 ${shiftHeadings(renderMarkdown(markdown))}
 </article>
-</body>
-</html>
-`;
-}
-
-/** The text a person pastes into a language model so it writes ParaScript. */
-export function modelPrompt(reference: string): string {
-    return [
-        "ParaScript is the language you use to describe one closed solid. A face is a formula: two numbers in, one point out. A part is a function of its sizes. A join seats one part on another by the anchors they share, then keeps both solids or cuts one away. You write the faces and export one component. The workspace compiles that script and draws the solid. That is what the language is for: a description a compiler can build, with a facing and a place for every surface.",
-        "",
-        "A person will describe the solid they want. Reply with one complete script and no surrounding explanation. They will paste that script into the ParaScript workspace and press Run solver.",
-        "",
-        "Use only the forms in the reference below. The reference is included here in full. Copy the smallest example that already does what is asked, and change its parameters. The plate is the form for a grid or a circle of features. The screw is the form when a measurement comes from a standard. The broom is the form when one shape is seated several times.",
-        "",
-        reference.trimEnd(),
-        ""
-    ].join("\n");
-}
-
-/** The page that shows that prompt, ready to copy. */
-export function renderPromptPage(prompt: string): string {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ParaScript prompt</title>
-<meta name="description" content="Copy this prompt into a language model. It says what ParaScript is for and how to write one closed solid. Paste the script it returns into the workspace.">
-<link rel="stylesheet" href="/site.css">
-</head>
-<body>
-<header class="site">
-<a class="brand" href="/">ParaScript</a>
-<nav>
-<a href="/language">Language</a>
-<a href="/workspace">Workspace</a>
-</nav>
-</header>
-<main class="home">
-<p class="eyebrow">For your model</p>
-<h1>A prompt for your AI.</h1>
-<p class="lede">Copy this into your language model. It says what ParaScript is for and how to write a solid in it. Then describe the solid you want. Paste the script it returns into the workspace and press Run solver.</p>
-<p class="actions">
-<button class="primary" id="copy-prompt" type="button">Copy prompt</button>
-<a class="secondary" href="/workspace">Open the workspace</a>
-</p>
-<textarea id="model-prompt" class="model-prompt" readonly spellcheck="false">${escapeHtml(prompt)}</textarea>
-</main>
-<script>
-const copyPrompt = document.getElementById("copy-prompt");
-const modelPromptField = document.getElementById("model-prompt");
-copyPrompt.addEventListener("click", () => {
-    const text = modelPromptField.value;
-    const done = () => {
-        copyPrompt.textContent = "Copied";
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, () => {
-            modelPromptField.focus();
-            modelPromptField.select();
-        });
-        return;
-    }
-    modelPromptField.focus();
-    modelPromptField.select();
-});
-</script>
 </body>
 </html>
 `;

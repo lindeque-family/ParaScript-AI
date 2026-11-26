@@ -61,34 +61,10 @@ h1 { margin: 0 0 16px; color: #fff; font-size: clamp(2rem, 6vw, 3.4rem); line-he
     text-decoration: none;
     font-weight: 600;
 }
-.actions a.primary, .actions button.primary { background: #007acc; color: #fff; }
-.actions a.primary:hover, .actions button.primary:hover { background: #0062b3; }
+.actions a.primary { background: #007acc; color: #fff; }
+.actions a.primary:hover { background: #0062b3; }
 .actions a.secondary { border: 1px solid #3c3c3c; color: #d4d4d4; }
 .actions a.secondary:hover { border-color: #007acc; }
-.actions button.primary {
-    flex: 1 1 12rem;
-    padding: 12px 16px;
-    border: 0;
-    border-radius: 6px;
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-}
-.model-prompt {
-    display: block;
-    width: 100%;
-    min-height: 60vh;
-    margin: 8px 0 0;
-    padding: 16px;
-    border: 1px solid #2d2d2d;
-    border-radius: 10px;
-    background: #161616;
-    color: #d4d4d4;
-    font-family: "Fira Code", Consolas, Monaco, monospace;
-    font-size: 0.84rem;
-    line-height: 1.45;
-    resize: vertical;
-}
 .points {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -103,13 +79,43 @@ h1 { margin: 0 0 16px; color: #fff; font-size: clamp(2rem, 6vw, 3.4rem); line-he
 .point h2 { margin: 0 0 8px; font-size: 1.08rem; }
 .point p, .home p { margin: 0; }
 .home { max-width: 64rem; margin: 0 auto; padding-top: clamp(36px, 7vw, 72px); padding-bottom: max(48px, env(safe-area-inset-bottom)); }
-.home .lede, .philosophy { max-width: 40rem; }
-.philosophy p { margin: 0 0 14px; }
-.philosophy p:last-child { margin-bottom: 0; }
-#for-a-language-model { margin-top: 36px; border: 1px solid #2d2d2d; background: #252526; border-radius: 12px; padding: 20px; max-width: 40rem; }
-#for-a-language-model h2 { margin: 0 0 8px; color: #fff; font-size: 1.08rem; }
-#for-a-language-model p { margin: 0 0 12px; }
-#for-a-language-model p:last-child { margin-bottom: 0; }
+.home .lede, .workflow figcaption { max-width: 40rem; }
+.workflow { margin: 8px 0 0; }
+.workflow .path { margin: 0 0 12px; padding: 16px; border: 1px solid #2d2d2d; border-radius: 12px; background: #1e1e1e; }
+.workflow .path-strong { border-color: #1f4e79; background: #15202b; }
+.home .path-label { margin: 0 0 12px; color: #8d8d8d; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.home .path-strong .path-label { color: #79c0ef; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.flow li { background: #252526; border: 1px solid #3c3c3c; border-radius: 8px; padding: 10px 14px; color: #fff; font-weight: 600; }
+.flow li.join { background: none; border: 0; padding: 0 2px; color: #6e6e6e; font-weight: 500; }
+.flow .bundle { display: flex; align-items: center; gap: 8px; }
+.flow .bundle .plus { color: #8d8d8d; font-weight: 500; }
+.flow .result-weak { border-style: dashed; color: #9a9a9a; }
+.flow .result-weak span, .flow .result-strong span { display: block; margin-top: 2px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.flow .result-weak span { color: #8a8a8a; }
+.flow .result-strong { background: #007acc; border-color: #007acc; }
+.flow .result-strong span { color: #d6ecff; }
+.workflow figcaption { margin: 4px 0 0; color: #e0e0e0; font-size: 1.05rem; line-height: 1.45; }
+.sample { margin: 28px 0 0; }
+.home .sample figcaption { margin: 0 0 10px; max-width: 40rem; color: #e0e0e0; font-size: 1.05rem; line-height: 1.45; }
+.sample pre {
+    margin: 0;
+    padding: 16px 18px;
+    overflow: auto;
+    border: 1px solid #2d2d2d;
+    border-radius: 12px;
+    background: #161616;
+    color: #d4d4d4;
+    font-family: "Fira Code", Consolas, Monaco, monospace;
+    font-size: 0.84rem;
+    line-height: 1.5;
+}
+.sample .kw, .reference pre .kw { color: #c586c0; }
+.sample .fn, .reference pre .fn { color: #dcdcaa; }
+.sample .name, .reference pre .name { color: #9cdcfe; }
+.sample .str, .reference pre .str { color: #ce9178; }
+.sample .num, .reference pre .num { color: #b5cea8; }
+.sample .cmt, .reference pre .cmt { color: #6a9955; }
 .reference {
     max-width: 46rem;
     margin: 0 auto;
@@ -119,6 +125,26 @@ h1 { margin: 0 0 16px; color: #fff; font-size: clamp(2rem, 6vw, 3.4rem); line-he
 }
 .reference h2 { font-size: clamp(1.5rem, 4vw, 2rem); margin: 0 0 16px; }
 .reference h3 { font-size: 1.25rem; margin: 2.2rem 0 0.7rem; padding-top: 0.4rem; border-top: 1px solid #2d2d2d; }
+.reference h4 { margin: 1.8rem 0 0.55rem; color: #fff; font-size: 1.18rem; line-height: 1.3; }
+.reference .guide { margin: 0.15rem 0 1rem; }
+.reference .guide img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #2d2d2d;
+    border-radius: 12px;
+    background: #161616;
+}
+.reference .guide figcaption { margin: 8px 2px 0; color: #c8c8c8; font-size: 0.98rem; }
+.reference .remember {
+    margin: 0 0 1.15rem;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: #f6d45a;
+    color: #1a1a1a;
+}
+.reference .remember p { margin: 0; color: #1a1a1a; }
+.reference .remember code { color: #5c3b00; }
 .reference p, .reference ul { margin: 0 0 0.95rem; }
 .reference li { margin: 0.35rem 0; }
 .reference code { font-family: "Fira Code", Consolas, Monaco, monospace; font-size: 0.92em; color: #ce9178; }

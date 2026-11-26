@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300">
+  <rect width="800" height="300" fill="#161616"/>
+  <rect x="24" y="36" width="176" height="150" rx="14" fill="#1e1e1e" stroke="#3c3c3c" stroke-width="2"/>
+  <rect x="216" y="36" width="176" height="150" rx="14" fill="#1e1e1e" stroke="#3c3c3c" stroke-width="2"/>
+  <rect x="408" y="36" width="176" height="150" rx="14" fill="#1e1e1e" stroke="#3c3c3c" stroke-width="2"/>
+  <rect x="600" y="36" width="176" height="150" rx="14" fill="#1e1e1e" stroke="#3c3c3c" stroke-width="2"/>
+  <text x="112" y="78" text-anchor="middle" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="16" font-weight="700">refused</text>
+  <text x="304" y="78" text-anchor="middle" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="16" font-weight="700">refused</text>
+  <text x="496" y="78" text-anchor="middle" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="16" font-weight="700">refused</text>
+  <text x="688" y="78" text-anchor="middle" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="16" font-weight="700">refused</text>
+  <text x="112" y="122" text-anchor="middle" fill="#ce9178" font-family="Consolas, monospace" font-size="22">Cube</text>
+  <text x="304" y="122" text-anchor="middle" fill="#ce9178" font-family="Consolas, monospace" font-size="20">-16.0</text>
+  <text x="496" y="122" text-anchor="middle" fill="#ce9178" font-family="Consolas, monospace" font-size="16">Brick(40.0)</text>
+  <text x="688" y="122" text-anchor="middle" fill="#ce9178" font-family="Consolas, monospace" font-size="18">export(1.0)</text>
+  <text x="112" y="230" text-anchor="middle" fill="#d4d4d4" font-family="Segoe UI, Helvetica, sans-serif" font-size="16">write the faces</text>
+  <text x="304" y="230" text-anchor="middle" fill="#d4d4d4" font-family="Segoe UI, Helvetica, sans-serif" font-size="16">0.0 - 16.0</text>
+  <text x="496" y="230" text-anchor="middle" fill="#d4d4d4" font-family="Segoe UI, Helvetica, sans-serif" font-size="16">name each one</text>
+  <text x="688" y="230" text-anchor="middle" fill="#d4d4d4" font-family="Segoe UI, Helvetica, sans-serif" font-size="16">one component</text>
+</svg>

@@ -1,50 +1,136 @@
 # ParaScript language
 
-This is the language the workspace compiler accepts. Write a script using only the forms on this page. Paste it into the [workspace](/workspace) and press Run solver. The canonical text for a language model is [https://parascript.lindeque.family/language.md](https://parascript.lindeque.family/language.md).
+This is the language the workspace compiler accepts. Write a script using only the forms on this page. Paste it into the [workspace](/workspace) and press Run solver.
 
 A script builds one closed solid and publishes it as a component. There is no library of cubes, spheres, or cylinders. You write the faces.
 
 The language is functional. A face, a part, and an assembly are functions of the numbers that can change. Call those functions with the sizes at the use site. When the same shape appears again, call the function again. Do not copy its faces.
 
-## Guidance for a language model
+## How to write a solid
 
-The complete scripts below are the examples. Copy the smallest one that already does the thing you need, and change its parameters. The plate is the form to copy for a grid of features and a circle of features. The screw is the form to copy when a measurement comes from a standard. The broom is the form to copy when one shape is seated several times by `join`.
+A script describes one closed solid. The workspace compiles that script and draws the solid. Six pictures follow. Each picture is one idea. Read the picture, then the sentences under it.
 
-Build the model in this order.
+The examples later on this page are finished scripts. Copy the smallest one that already does what you want, and change the sizes.
 
-1. Put the model's parameters in the `parameters` section, immediately after `setup`. A size, a count, and a position are fields there, grouped by the part they describe. When a measurement comes from a standard, put that field in a group named for the standard, as the screw does with `iso_4017` and `iso_68_1`. Read a field with `$`, as in `$plate.size` and `$holes.radius`. A later field in a group may use an earlier field by its short name. Bind `pi` when a curve needs it: `def pi = 3.14159265359`. A top-level number is for a value the whole script shares, such as `pi`. The broom's sizes live in that section, one group per part, and are read with `$handle.radius`. `Cylinder` still receives `radius` and `height` at the call.
-2. Name each face for the surface it is. A face is a 2D surface. A cylinder is one `Tube` and two `Disk` calls, named with `let` inside `Cylinder`, as the plate and the broom do. `Tube` is the round wall. `Disk` is a cap. `Cylinder` calls them from `solid: coords =>`: `Tube(coords: coords, radius: radius, height: height)`, `Disk(coords: coords, radius: radius, z: 0.0)`, and `Disk(coords: coords, radius: radius, z: height)`. A box is six faces in `Box`, standing on z = 0, with `corner` at the minimum point. A vector is `Vector(coords: coords, x:, y:, z:)`. `Component` passes one coordinate system into `solid: coords =>` and `expose: coords =>`. A script cannot construct that value. A helper defined outside those callbacks takes `coords` and the call passes it. `join`'s last parameter is that coordinate system, and `join` ignores the value, so a component passes `solid: join(...)`. A component does not expose that system. A direction a mate needs is an anchor on the part. Inside `using`, move a point with `offset(x:, y:, z:)` and combine two vectors with `add(vector:)` or `subtract(vector:)`.
-3. Write a shape once, as a function of the sizes that change, and call it. `Box(width:, depth:, height:)` and `Cylinder(radius:, height:)` are those functions. The plate is `Box(width: $plate.size, depth: $plate.size, height: $plate.thickness)`. The host exposes `up`, `right`, and `corner`. A part that will be seated exposes `up`, `right`, and `bottom`. The exported component exposes `origin`, the point the viewer hangs the model on.
-4. A function that is not a component uses `snake_case`, and the name says what it returns. `vector_grid` returns the points of a grid. `circular_pattern` returns the points of a circle. `place_components` seats one component at each of those points. A component uses `PascalCase`, such as `Plate`, `Box`, and `Cylinder`.
-5. Seat repeated parts with `place_components`, as the plate and the remote do. It folds the point list, and each step is one `join`. The point is added to the host's `corner` and meets the placed part's `bottom`. Pass `combine` at the call. `combine: frame => placed => frame - placed` cuts the placed solid away. `combine: frame => placed => frame + placed` keeps both. The lambda is written at the call, and its parameters are named `frame` and `placed`.
-6. `integers(start:, count:)` builds the whole numbers a grid or a circle needs. `map` walks a list, and its parameter is named `item`. `|>` fills the next argument, so a list can be piped into `map`. A list has no length. `fold` on the plate is a right fold the script defines. The language does not provide `fold`.
-7. Export one component. The plate exports `Component(solid: coords => PlateWithKnobs(coords: coords), expose: coords => { origin: ... })`. The broom exports the finished `Broom`. A `join` returns a solid without anchors, so wrap it in `Component` and publish the anchors the next mate reads.
+### 1. A face is a formula
 
-`value |> fn` fills `fn`'s next argument. `items |> map(f: item => ...)` is `map(f: ..., list: items)`. `items |> map` is rejected, because `map` is still waiting for `f`. `f >> g` composes two functions and runs `f` first. Both functions must already be waiting for one value. `>>` binds more tightly than `|>`.
+![Two numbers in. One point out.](/guide/face.svg)
 
-A call is a name and its arguments. Bind `def adjust = shift(d: 3.0) >> scale(k: 2.0)`, then call `adjust(x: 4.0)`. `.` reads an anchor. `frame.up` is that anchor.
+A face takes two numbers, `u` and `v`, and returns one point. That point is a vector, measured from the origin of the part.
 
-`map`'s function names its parameter `item`. `filter`'s predicate names its parameter `item` and returns `true` or `false`. A formula has no comparisons, so the predicate is the literal `true` or `false`. `integers(start: 0.0, count: 5.0)` is `[0.0, 1.0, 2.0, 3.0, 4.0]`. `start` is the first whole number and `count` is how many values, including `start`. A list has no length. On this plate, `$holes.columns` has one entry per `$holes.count`, and `$pins.indexes` has one entry per `$pins.count`.
+![u slides the point along x. v slides it along y.](/guide/face-sweep.svg)
 
-`join`'s last parameter is the coordinate system, and `join` ignores it, so `join(...)` is already a function of that system. Pass the call as `solid`: `Component(solid: join(...), expose: coords => { up: plate.up, right: plate.right, origin: plate.origin, top: plate.top })`. The `solid` argument is that `join`, or `coords =>` a solid or a component. A bare parameter that is not yet a solid or a component is rejected. A component does not expose that system, so `frame.coords` does not typecheck. A script has one coordinate system, so `plate.origin.add(vector: placed.at)` is legal. `setup`'s `coordinate_system` string tells the viewer which axis is up. The `using` parameters are named `frame` and `placed`, in that order. Inside `combine`, `frame - placed` cuts the placed solid away and `frame + placed` keeps both, and `coords` is not visible there. Seat one feature per `join`, then join the next feature onto that result. A `Solid3D` is one closed body.
+A flat face is the easy one to see. `u` is how far the point has walked along x. `v` is how far it has walked along y. The height is `0`.
 
-A `def` is a top-level binding. A reusable function takes what it needs as arguments at the call. The model's parameters belong in the `parameters` section. `vector_grid`, `circular_pattern`, and `place_components` take arguments. `PlateWithHoles` reads `$holes` and `PlateWithKnobs` reads `$pins`. Inside a function, `let name = expression in expression` names a value for the expression after `in`. `Cylinder` binds its two caps that way.
+```text
+Surface2D(
+    max_u: width,
+    min_v: u => 0.0,
+    max_v: u => depth,
+    formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)
+)
+```
 
-## Lessons
+Hold `v` still and let `u` grow. The tip slides along one line. Hold `u` still and let `v` grow. The tip slides along the line that crosses the first. Every pair in the two ranges is a point on the face.
 
-The examples below are the scripts that follow these lessons. Copy the plate for a grid of features on a part, or for a circle of features.
+`u` runs from `0` to `max_u`. At each `u`, `v` runs from `min_v(u)` to `max_v(u)`. The flat face uses one pair of limits the whole way across. A sphere lets `u` walk once around and `v` walk from the top pole to the bottom pole. Move `u` and `v` across their ranges and the points make the surface.
 
-Write a shape once and call it. A cylinder is one `Tube` and two `Disk` calls. `Tube` is the round wall. `Disk` is a cap. A plate is a square box: `Plate` calls `Box(width: $plate.size, depth: $plate.size, height: $plate.thickness)`. The six faces stay in `Box`. That box stands on z = 0 and publishes `corner` at its minimum point. The exported plate publishes `origin` at that same corner, which is the point the viewer hangs the model on. The box example seats a void from `corner` and publishes `origin` at the center.
+A sphere is one face. A box is six faces. A cylinder is a round wall and two caps.
 
-`vector_grid` returns the points of a grid. `circular_pattern` returns the points of a circle. These are functions, so the names are `snake_case`. `Plate`, `Box`, and `Cylinder` are components, so those names are `PascalCase`. `integers(start: 0.0, count: 5.0)` is `[0.0, 1.0, 2.0, 3.0, 4.0]`. A list has no length. The plate's hole grid is `$holes.count_width` by `$holes.count_depth`. The knob circle has `$pins.count` points, which is 7.
+> Remember: you write the face, or you call a part that already wrote it.
 
-`place_components` seats one `Cylinder` at each point. The same call chooses `radius` and `height`, so the holes and the knobs are two calls. A hole is cut with `combine: frame => placed => frame - placed`. A knob is kept with `combine: frame => placed => frame + placed`. The point meets `corner.add(vector: item)` and `placed.bottom`. A knob is sunk by `$pins.bite`, so its cap is inside the plate and the wall crosses the top face.
+### 2. Write a part once
 
-The model's parameters belong in the `parameters` section. A size is a parameter of the part. The numbers for the file live there, and the script reads them. `pi` is the value the whole script shares. A vector's first argument is the coordinate system from `solid: coords =>` and `expose: coords =>`. Write `Vector(coords: coords, x:, y:, z:)`. Inside `using`, move a point with `offset(x:, y:, z:)` and combine two vectors with `add(vector:)`. `|>` pipes a value into the next argument. `items |> map(f: item => ...)` fills `list`. `>>` composes two functions and binds more tightly. A call names every argument, in parameter order. A `def` is top-level. One `join` seats one feature. Pass `join(...)` as `solid`. A `Solid3D` is one closed body.
+![One cylinder becomes the handle, the ferrule, and the hole.](/guide/part.svg)
 
-## Script shape
+A part is a function of its sizes. Write the shape once. Call it every time that shape appears, and pass the sizes at the call.
 
-A script starts with `setup`, then an optional `parameters` block, then bindings, then one export.
+```text
+def Cylinder = radius => height => Component(solid: coords => ...)
+
+Cylinder(radius: 11.0, height: 1000.0)
+Cylinder(radius: 16.0, height: 36.0)
+```
+
+The broom does this with one cylinder. The handle is a long call. The ferrule is a short call. The hole is a thin call. Same part. Three sizes.
+
+### 3. Keep the sizes in parameters
+
+![The plate reads $plate.size.](/guide/parameters.svg)
+
+The list on the left is the plate's numbers.
+
+```text
+parameters {
+    plate: {
+        size: 100.0,
+        thickness: 8.0
+    }
+}
+```
+
+The gold label is the plate reading its width. `$plate.size` means the `size` written under `plate`. Change `100.0` and the plate grows or shrinks. The faces stay the ones you wrote.
+
+A count, such as how many holes, and a position, such as where a hole sits, are numbers of the same kind. They sit with the part they describe.
+
+### 4. Publish anchors
+
+![The host publishes corner. The seated part publishes bottom.](/guide/anchors.svg)
+
+A part keeps its own coordinates. It publishes the points and directions a mate may use. Those published names are the anchors.
+
+The host publishes `up`, `right`, and `corner`. A part that will be seated publishes `up`, `right`, and `bottom`. The component you export publishes `origin`. That is the point the viewer hangs the model on.
+
+```text
+expose: coords => {
+    up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
+    right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
+    corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+}
+```
+
+### 5. Seat one feature with join
+
+![frame - placed cuts a hole. frame + placed keeps a knob.](/guide/join.svg)
+
+`join` turns the incoming part until the anchors agree, slides it into place, and then combines the two solids.
+
+Name the two parameters `frame` and `placed`, in that order. `frame - placed` cuts the placed solid away. `frame + placed` keeps both solids. A hole uses the cut. A knob uses the keep.
+
+```text
+join(
+    frame: Plate,
+    placed: Hole,
+    using: frame => placed => align(
+        planar: meet(frame: frame.up, placed: placed.up),
+        translation: meet(frame: frame.corner, placed: placed.bottom),
+        rotation: meet(frame: frame.right, placed: placed.right)
+    ),
+    combine: frame => placed => frame - placed
+)
+```
+
+Seat one feature per join. A join returns a solid with no anchors, so wrap it in `Component` before the next seat.
+
+### 6. Export one component
+
+![export sends one component to the workspace.](/guide/export.svg)
+
+End the script with one `export`. A sphere passes its radius at the call. A broom exports the finished broom.
+
+```text
+export(Sphere(radius: 25.0))
+```
+
+Open the [workspace](/workspace), paste the script, and press Run solver.
+
+> Remember: the plate is the script for a grid or a circle. The screw is the script for a standard measurement. The broom is the script for one shape seated several times.
+
+## The shape of a script
+
+![setup, then parameters, then the parts, then one export.](/guide/script.svg)
+
+Four beats, in this order. `setup`, then `parameters`, then the parts, then one `export`.
 
 ```text
 setup {
@@ -56,70 +142,82 @@ parameters {
     plate: {
         size: 100.0,
         thickness: 8.0
-    },
-    holes: {
-        radius: 3.0,
-        pitch: $plate.size / 8.0
     }
 }
 ```
 
-- `units` is `"mm"` or `"inch"`. The numbers in the script are already in that unit. The compiler does not scale them.
-- `coordinate_system` is `"Z-up"`, `"Y-up"`, or `"X-up"`. Write the coordinates in that system. The viewer uses it to decide which axis points up.
+- `units` is `"mm"` or `"inch"`. The numbers are already in that unit.
+- `coordinate_system` is `"Z-up"`, `"Y-up"`, or `"X-up"`. It tells the viewer which axis is up.
 - `setup` has those two fields and no others.
-- `parameters` sits immediately after `setup`. The model's parameters belong in this section: a size, a count, and a position are fields here. A group is a name and a block. A field is a name and a value. A group may contain groups. When a measurement comes from a standard, that field sits in a group named for the standard. A top-level `def` of a number is for a value the whole script shares, such as `pi`.
-- `$plate` reads that parameter. `$plate.size` reads a field. A solid may also be named `plate`; `plate.origin` is then an anchor. Inside the `plate` group, an earlier field is the short name `size`. A later group reads an earlier one with `$plate.size`.
-- `.` on `$plate` reads a field. `.` on a component reads an anchor, such as `frame.up`.
-- Bind a name with `def name = expression`. `param name = expression` is the same kind of binding. Bind each name once.
-- The script ends with `export(...)`. The value must be a component. A sphere supplies its size at the call: `export(Sphere(radius: 25.0))`. A box reads its sizes from `parameters` and exports the finished component: `export(HollowBox)`. A number, a vector, a raw solid, a bare `join`, or a function that still expects arguments is rejected. When several exports appear, the last one is published.
-- Comments are `//` to the end of the line. Statements are separated by the words above, not by semicolons.
+- `parameters` sits immediately after `setup`. A size, a count, and a position are fields there, grouped by the part.
+- A group may contain groups. Inside the group, a later field uses an earlier field by its short name. A later group reads it as `$plate.size`.
+- A measurement from a standard sits in a group named for that standard.
+- `$plate.size` reads a field. `plate.origin` reads an anchor. The dot does both jobs, on different values.
+- `def name = expression` binds a name. `param` is the same binding. Bind each name once.
+- `export(...)` publishes one component. A sphere passes its radius at the call. A box exports the finished `HollowBox`. A number, a vector, a raw solid, a bare `join`, or a function that still wants arguments is refused. The last export wins.
+- A comment is `//` to the end of the line. The words above separate statements. There are no semicolons.
 
-## Names and arithmetic
+> Remember: pi belongs to the whole script. `def pi = 3.14159265359`. It is not a field of a part.
 
-A name is letters, digits, and underscores. Use `snake_case` for values and `PascalCase` for components. These words are reserved: `setup`, `parameters`, `param`, `def`, `fn`, `export`, `return`, `true`, `false`, `match`, `let`, `in`.
+## Snake and Pascal
 
-- Write numbers as decimals: `40.0`.
-- There is no unary minus. A negative number is `0.0 - 16.0`.
-- `+`, `-`, `*`, and `/` work on two numbers.
-- Move a vector with `point.offset(x:, y:, z:)`. Combine two vectors with `point.add(vector:)` and `point.subtract(vector:)`. The result keeps the receiver's coordinate system, and `add` and `subtract` require both vectors to carry that system.
-- Inside `combine`, `frame + placed` keeps both seated solids and `frame - placed` cuts the placed solid away.
-- Do not multiply or divide a vector by a number. Scale each component: `Vector(coords: coords, x: 2.0 * x, y: 2.0 * y, z: 2.0 * z)`.
-- `cos(rad: angle)` and `sin(rad: angle)` take radians. The argument name is `rad`.
-- When you need pi, bind it: `def pi = 3.14159265359`.
-- A formula has no `if`, no comparisons, and no loops. It is one arithmetic expression.
-- `fn` and `return` do not define a function. A function is a binding of a lambda.
+![vector_grid is a function. Plate is a component.](/guide/names.svg)
+
+A name is letters, digits, and underscores. `snake_case` is a value or a function. `PascalCase` is a component. `vector_grid` returns points. `Plate` is a part.
+
+These words are reserved: `setup`, `parameters`, `param`, `def`, `fn`, `export`, `return`, `true`, `false`, `match`, `let`, `in`.
+
+## Arithmetic
+
+![40.0 + 2.0 is numbers. offset moves a point.](/guide/arithmetic.svg)
+
+Numbers are decimals, such as `40.0`. A negative number is `0.0 - 16.0`. There is no unary minus.
+
+`+`, `-`, `*`, and `/` work on two numbers. They do not work on vectors. Scale a vector by writing each axis: `x: 2.0 * x`.
+
+Move a point with `offset(x:, y:, z:)`. Combine two vectors with `add(vector:)` and `subtract(vector:)`. Both vectors share a coordinate system, and the result keeps the receiver's system.
+
+`cos(rad:)` and `sin(rad:)` take radians. The argument is named `rad`.
+
+A formula has no `if`, no comparisons, and no loops. It is one expression. `fn` and `return` do not define a function. A function is a `def` of a lambda.
+
+> Remember: inside `combine` only, `frame + placed` keeps both solids and `frame - placed` cuts the placed solid away.
 
 ## Types
 
-A definition may declare its type before the value.
+![T in, T in, a number out.](/guide/types.svg)
+
+A `def` may announce its type, then give the value.
 
 ```text
 def same: T => T => number = x => y => 1.0
 ```
 
-`T` is a type variable. The same name in one signature is the same variable, so both parameters of `same` have one type, and the result is a number. `A => B => number` is two independent variables. A signature is checked against the value. Each use of `same` still chooses its own `T`, so one call can pass two numbers and another call can pass two vectors.
+`T` is one type variable, so both arguments share it and the result is a number. `A => B => number` is two different variables. The signature has to agree with the value. Each call of `same` picks its own `T`.
 
-These names are concrete types: `number`, `vector`, `boolean`, `string`, `component`, `solid`, `surface`, and `coordinate_system`. `[T]` is a list of `T`. `(number, vector)` is a tuple: each place keeps its own type, and the length is part of the type. `coordinate_system` is the value `Component` passes into a solid that builds geometry, into `expose`, and into `join`. A component does not expose it. A script cannot build one. `=>` is a function and groups to the right, so `T => T => number` is a function that returns a function. Parentheses group the other way: `(T => T) => number`. A comma inside those parentheses is a tuple type, so `(T => T)` is still grouping.
+Concrete types: `number`, `vector`, `boolean`, `string`, `component`, `solid`, `surface`, `coordinate_system`. `[T]` is a list. `(number, vector)` is a tuple, and the length is part of the type.
 
-A parameter in a signature may carry the call name: `a: T => b: T => number`. The value then uses those names. A signature that omits the name keeps the name written on the value.
+`=>` groups to the right, so `T => T => number` means a function that returns a function. Parentheses group the other way: `(T => T) => number`. A comma in those parentheses makes a tuple type.
 
-`map` has this signature. `T` is the element and `U` is the result:
+A signature may name the arguments: `a: T => b: T => number`. The value then uses `a` and `b`.
 
 ```text
 def map: (item: T => U) => (list: [T]) => [U] = f => list => ...
 ```
 
-## Functions
+## Write it once
 
-Write a shape once, as a function, and call it at every place that shape appears. Pass the sizes at the call, including in `export`. A second copy of the same faces is a mistake. A second size is another call.
+A second copy of the same faces is a mistake. Write the shape once. Call it every time it appears, and pass the sizes at the call, including at `export`.
 
-A size belongs to the part that uses it. It is a parameter of that part, written in the `parameters` section. The call reads it. Do not also bind `def size = 100.0`. A top-level number is for a value the whole script shares, such as `pi`.
+The sizes live in `parameters`. The call reads them. A top-level `def` of a number is for a value the whole script shares, such as pi.
 
-The broom does this. `Cylinder` is defined once. The handle, the ferrule, and the hole through the handle are three calls. The hole is not drawn again on its side. `join` turns that same cylinder until its axis lies across the handle.
+![One cylinder becomes the handle, the ferrule, and the hole.](/guide/part.svg)
 
-A function that is not a component uses `snake_case`, and the name says what it returns. `vector_grid` returns the grid of points. `circular_pattern` returns the points of a circle. `place_components` seats one component at each point. The call chooses `radius` and `height`. The plate is a square `Box`. It exposes `up`, `right`, and `corner`. The model's parameters belong in the `parameters` section. `PlateWithHoles` reads `$holes` and `PlateWithKnobs` reads `$pins`. Export `PlateWithKnobs`.
+The broom is the picture. One `Cylinder`. The handle, the ferrule, and the hole are three calls. `join` turns the hole until its axis lies across the handle.
 
-A face is a function too, and its name says which surface it is. `Tube` is the round wall. `Disk` is the round cap. A cylinder is those three faces:
+`vector_grid` returns a grid of points. `circular_pattern` returns the points of a circle. `place_components` seats one component at each point. `PlateWithHoles` reads `$holes`. `PlateWithKnobs` reads `$pins`.
+
+A cylinder is three faces. `Tube` is the wall. `Disk` is a cap.
 
 ```text
 Tube(coords: coords, radius: radius, height: height)
@@ -127,32 +225,21 @@ Disk(coords: coords, radius: radius, z: 0.0)
 Disk(coords: coords, radius: radius, z: height)
 ```
 
-`let` names a value inside a function. The name is in scope after `in`, and it has the type of that value. `let (x, y) = pair in` takes a tuple apart. `Cylinder` uses `let` for the two caps. The anchors stay points: `bottom` in `expose` is `Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)`, and `bottom` the face is the `Disk`.
+`let` names a value inside a function. The name exists after `in`. `let (x, y) = pair in` opens a tuple. `Cylinder` binds its two caps that way. The anchor `bottom` is a point. The face `bottom` is the disk. Same word, two jobs, two places.
 
-```text
-let bottom = Disk(coords: coords, radius: radius, z: 0.0) in
-let top = Disk(coords: coords, radius: radius, z: height) in
-```
+`frame.up` reads an anchor. `frame . up` is the same read.
 
-`.` reads an anchor, as in `frame.up`. Spaces do not change that. `frame . up` is the same as `frame.up`.
+## The pipe and the compose
 
-`>>` composes two functions, left to right. The left function runs first, and its result is the right function's argument. The composed function keeps the left function's parameter name. Each function must already be waiting for that one value:
+![1, 2, 3 go in. 2, 4, 6 come out.](/guide/pipe.svg)
 
-```text
-def shift = d => x => x + d
-def scale = k => x => k * x
-def adjust = shift(d: 3.0) >> scale(k: 2.0)
-```
-
-`adjust(x: 4.0)` is `scale(k: 2.0, x: shift(d: 3.0, x: 4.0))`, which is `14`. `shift >> scale` is rejected, because `shift` is still waiting for `d`.
-
-`|>` pipes a value into a function, left to right. The value fills the function's next argument. Write the earlier arguments in the call and leave that last one out:
+`|>` feeds a value into the next argument of a function.
 
 ```text
 [1.0, 2.0, 3.0] |> map(f: item => item * 2.0)
 ```
 
-That is `map(f: item => item * 2.0, list: [1.0, 2.0, 3.0])`, which is `[2.0, 4.0, 6.0]`. The same value can continue into the next function:
+That is `map(f: item => item * 2.0, list: [1.0, 2.0, 3.0])`, which is `[2.0, 4.0, 6.0]`. The list can keep going:
 
 ```text
 [1.0, 2.0, 3.0]
@@ -160,36 +247,31 @@ That is `map(f: item => item * 2.0, list: [1.0, 2.0, 3.0])`, which is `[2.0, 4.0
     |> filter(predicate: item => true)
 ```
 
-`filter` keeps every element here, so the result is still `[2.0, 4.0, 6.0]`.
-
-`>>` composes functions. `|>` sends a value into a function. `>>` binds more tightly, so this pipes `4.0` into the composed function and the result is `14`:
+`>>` glues two functions. The left one runs first. Each one must already be waiting for a single value.
 
 ```text
-4.0 |> shift(d: 3.0) >> scale(k: 2.0)
+def shift = d => x => x + d
+def scale = k => x => k * x
+def adjust = shift(d: 3.0) >> scale(k: 2.0)
 ```
 
-The function on the right must already be waiting for the piped value. `map` waits for `f` first and `list` second, so pipe the list: `items |> map(f: item => ...)`. `items |> map` is rejected, because `map` is still waiting for `f`.
+`adjust(x: 4.0)` is `14`. `shift >> scale` is refused, because `shift` is still waiting for `d`. `>>` binds tighter than `|>`, so `4.0 |> shift(d: 3.0) >> scale(k: 2.0)` is also `14`.
 
-A function takes one argument at a time.
+`map` waits for `f` first. Pipe the list: `items |> map(f: item => ...)`. `items |> map` is refused.
 
-```text
-def pad = coords => amount => Vector(coords: coords, x: amount, y: amount, z: 0.0)
-def Brick = width => depth => height => Component(...)
-```
-
-Call it with every argument, in the same order as the parameters, each by name:
+A function takes one argument at a time. Name every argument, in order.
 
 ```text
 export(Brick(width: 40.0, depth: 30.0, height: 20.0))
 ```
 
-`Brick(40.0, 30.0, 20.0)` is rejected. The names are part of the call. A call that leaves arguments off returns a function, and `export` cannot publish a function. Pass every argument.
+`Brick(40.0, 30.0, 20.0)` is refused. Leave an argument off and you still have a function. `export` cannot publish a function.
 
 ## Lists
 
-A list is `[1.0, 2.0]`. `head :: tail` puts `head` at the front. `[]` is the empty list.
+![The first value is the head. The rest is the tail.](/guide/lists.svg)
 
-`match` takes the empty list, or it splits the first element from the rest:
+A list is `[1.0, 2.0]`. `head :: tail` puts one value at the front. `[]` is empty.
 
 ```text
 match items {
@@ -198,99 +280,80 @@ match items {
 }
 ```
 
-A `def` may call itself.
-
-`map` and `filter` are built in. `map` calls `f` once per element. That function's parameter is named `item`:
+A `def` may call itself. `map` and `filter` are built in, and their function argument is named `item`.
 
 ```text
 map(f: item => item * 2.0, list: [1.0, 2.0])
-```
-
-That is `[2.0, 4.0]`. The same call reads left to right with `|>`, which fills `list`:
-
-```text
-[1.0, 2.0] |> map(f: item => item * 2.0)
-```
-
-`filter` keeps the elements for which `predicate` returns `true`. `true` and `false` are the boolean values. The predicate's parameter is also named `item`:
-
-```text
 filter(predicate: item => true, list: [1.0, 2.0])
 ```
 
-That keeps both elements. `item => false` keeps none.
+`item => true` keeps every element. `item => false` keeps none. A formula cannot compare, so the predicate is the literal `true` or `false`.
 
-`integers` builds whole numbers. `start` is the first value. `count` is how many values, including `start`. The arguments are named, in that order:
+`integers(start:, count:)` builds whole numbers. `start` is the first. `count` is how many, including the first.
 
 ```text
 integers(start: 0.0, count: 5.0)
 ```
 
-That is `[0.0, 1.0, 2.0, 3.0, 4.0]`. The last value is `4.0`. `integers(start: 0.0, count: 0.0)` is `[]`. `integers(start: 0.0 - 2.0, count: 3.0)` is `[-2.0, -1.0, 0.0]`. `start` and `count` are whole numbers, and `count` is zero or more. `5.0 |> integers(start: 1.0)` fills `count`, so that list runs from `1.0` through `5.0`.
+That is `[0.0, 1.0, 2.0, 3.0, 4.0]`. `integers(start: 0.0, count: 0.0)` is `[]`. `integers(start: 0.0 - 2.0, count: 3.0)` is `[-2.0, -1.0, 0.0]`. `5.0 |> integers(start: 1.0)` fills `count`, so the list runs from `1.0` through `5.0`.
 
-`map` returns a new list. On the plate, `vector_grid` maps index pairs to points, and `circular_pattern` maps `integers` to the points of a circle. `place_components` then seats one cylinder at each point. An empty list returns the host. Each other step joins one cylinder onto the host and passes that host on.
+`map` returns a new list. On the plate, `vector_grid` and `circular_pattern` build the points, and `place_components` seats a cylinder at each one. An empty list returns the host unchanged.
 
 ## Tuples
 
-A tuple holds a fixed number of values, and each value keeps its own type. A list cannot do that: every element of `[T]` is a `T`.
+![A tuple keeps each value's own type.](/guide/tuple.svg)
+
+A tuple holds a fixed count, and each place keeps its own type. A list cannot do that: every element of `[T]` is a `T`.
 
 ```text
 def pair = (1.0, true)
 def nested = (1.0, (2.0, 3.0))
 ```
 
-`(1.0 + 2.0)` has no comma, so the parentheses only group the sum. A tuple needs at least two elements. Take it apart with `let`. The names are in scope after `in`:
+`(1.0 + 2.0)` has no comma, so the parentheses only group the sum. A tuple needs at least two values. Open it with `let`. The names exist after `in`.
 
 ```text
 def sum = let (x, (y, z)) = nested in x + y + z
 ```
 
-That `sum` is `6`. A name in one pattern is bound once. There is no `pair.0` and no `pair.x`. A signature writes the same shape. `T` is one type variable in both places, and `U` is another:
+That sum is `6`. There is no `pair.0` and no `pair.x`.
 
 ```text
 def first: (T, U) => T = pair => let (x, y) = pair in x
 ```
 
-`first(pair: (1.0, true))` is `1.0`. `first(pair: (Mark.at, 2.0))` is the vector. `(number, number, number)` does not match `(number, number)`.
+`first(pair: (1.0, true))` is `1.0`. `(number, number, number)` does not match `(number, number)`.
 
 ## Vectors
 
-A vector carries the script's coordinate system, then `x`, `y`, and `z`, in that order:
+![x to the right, y along the depth, z up.](/guide/vector.svg)
+
+A vector is the coordinate system, then `x`, `y`, and `z`, in that order.
 
 ```text
 Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0)
 ```
 
-`coords` is required, and that parameter name is `coords`. A script cannot construct a coordinate system. There is no `CoordinateSystem(...)` expression. `Component` creates one system for the script. A solid that builds geometry receives it as `coords =>`. `expose` receives it the same way. A component does not expose that system. `frame.coords` does not typecheck. A direction used by a mate is an anchor, as the broom's cylinder publishes `forward`.
+The parameter is named `coords`. A script cannot build a coordinate system. There is no `CoordinateSystem(...)`. `Component` creates the one system and hands it to `solid: coords =>` and `expose: coords =>`. A component does not publish it. `frame.coords` does not typecheck. A direction a mate needs is an anchor. The broom's cylinder publishes `forward`.
 
-```text
-Component(
-    solid: coords => Solid3D(faces: [ ... ]),
-    expose: coords => {
-        up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0)
-    }
-)
-```
+Write a `Vector` inside those callbacks, or inside a helper that receives `coords` and is called from there. A face formula is `u => v => Vector(...)`, and that formula sits where `coords` is in scope.
 
-Write a `Vector` inside `solid: coords =>` or `expose: coords =>`, or inside a helper that receives `coords` and is called from there. A face formula is `u => v => Vector(coords: coords, ...)`, and that formula sits in the solid callback so `coords` is in scope. `join` takes the coordinate system last and ignores it, so the solid of a join is the call itself: `solid: join(...)`. Inside `using` there is no outer `coords`. Move a point with `offset`. The result keeps that point's coordinate system:
+`join` takes the coordinate system last and ignores it, so the solid is the call: `solid: join(...)`. Inside `using` there is no `coords`. Move a point with `offset`.
 
 ```text
 frame.top.offset(x: 0.0, y: 0.0, z: 0.0 - overlap)
-```
-
-Two vectors that already exist combine with `add` and `subtract`. The argument name is `vector`. Both must carry the same coordinate system, and the result keeps the receiver's system:
-
-```text
 plate.origin.add(vector: placed.at)
 ```
 
-`+` and `-` do not combine vectors. `coords` is opaque. It is not an anchor, and an expose block cannot publish a field named `coords`. The `coordinate_system` field in `setup` tells the viewer which axis is up. It is not a value the script can pass to `Vector`. In a signature the type is written `coordinate_system`.
+`+` and `-` do not combine vectors. An expose block cannot publish a field named `coords`. The `coordinate_system` string in `setup` is for the viewer. It is not a value you can pass to `Vector`.
 
-`up` is the direction the viewer treats as up. For `Z-up` that is `Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0)`. `right` is `Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0)`.
+For `"Z-up"`, `up` is `(0, 0, 1)` and `right` is `(1, 0, 0)`.
 
-## Faces
+## A face
 
-A face is a `Surface2D`. `u` runs from `0` to `max_u`. At each `u`, `v` runs from `min_v(u)` to `max_v(u)`. Both bounds are functions of `u`. The formula is two lambdas, `u => v => Vector(coords: coords, ...)`, in the part's own coordinates.
+![Two numbers in. One point out.](/guide/face.svg)
+
+A face is a `Surface2D`. `u` runs from `0` to `max_u`. At each `u`, `v` runs from `min_v(u)` to `max_v(u)`. The formula is `u => v => Vector(...)`, in the part's own coordinates.
 
 ```text
 Surface2D(
@@ -301,15 +364,17 @@ Surface2D(
 )
 ```
 
-The viewer samples each face on a grid of 16 to 32 steps. A detail much smaller than its face, such as one turn of a screw thread, needs its own face. Splitting a large smooth face into several faces is how you keep a small feature visible.
+The viewer samples a face on 16 to 32 steps. A detail smaller than that grid, such as one turn of a screw thread, needs its own face.
 
-## Solids and components
+## A component
 
-`Solid3D(faces: [ face, face ])` collects the faces. A closed box has six faces: bottom, top, and four walls. The faces must meet at their edges and enclose the volume.
+![The exported component publishes origin.](/guide/origin.svg)
 
-`Component(solid: coords => solid, expose: coords => { name: vector })` wraps a solid and publishes anchors. `solid` is `coords =>` a solid or a component, or `join(...)`, which is already a function of the coordinate system. `expose` is `coords => { anchors }`, and that parameter is named `coords`. Every anchor is a vector. Names are unique. `part.anchor` reads an anchor the component exposed. `part.coords` does not typecheck, and an expose block cannot publish `coords`. Any other name is an error. An empty publish list is `expose: coords => {}`.
+`Solid3D(faces: [ ... ])` collects the faces. A closed box has six, and they meet at the edges.
 
-Expose `origin` on the exported component as the point the viewer hangs the model on. The box puts that point at the center. The plate puts it at the corner the grid measures from.
+`Component` wraps a solid and publishes anchors. `solid` is `coords =>` a solid or a component, or `join(...)`. `expose` is `coords => { anchors }`. Every anchor is a vector. Names are unique. `part.anchor` reads one. An empty list is `expose: coords => {}`.
+
+The component you export publishes `origin`. That is the point the viewer hangs the model on. The box puts it at the center. The plate puts it at the corner the grid measures from.
 
 ```text
 expose: coords => {
@@ -319,9 +384,11 @@ expose: coords => {
 }
 ```
 
-## Joining two components
+## A join
 
-`join` places one component onto another. Both `frame` and `placed` must already be components. A function may receive a component and read the anchors it uses, as in `plate.origin`. The component passed at the call must expose every anchor that function reads. An inline `using` lambda can read `frame.up` and `placed.up` for the same reason. It moves a point with `frame.top.offset(x:, y:, z:)` and combines two vectors with `add(vector:)`. The last parameter is `coords`. `Component` supplies it, and `join` ignores the value, so the call you pass as `solid` omits it. Writing the coordinate system yourself makes the join a solid immediately. A bare `join(...)` is still a function of the coordinate system. The geometry has no anchors, so wrap it in `Component` and publish the anchors the next step needs before you export it or join it again.
+![frame - placed cuts a hole. frame + placed keeps a knob.](/guide/join.svg)
+
+`join` seats one component on another. Both are already components. The parameters are named `frame` and `placed`.
 
 ```text
 join(
@@ -336,27 +403,49 @@ join(
 )
 ```
 
-`using` is `frame => placed => align(...)`. The parameter names are `frame` and `placed`. `align` runs three steps, in this order:
+`align` does three things, in order. `planar` turns `placed` until the directions are parallel. `translation` slides it until the points meet. `rotation` turns it in that plane until the other directions match.
 
-1. `planar` turns `placed` until the two direction vectors are parallel.
-2. `translation` slides it until the two points meet.
-3. `rotation` turns it in that plane until the two direction vectors match.
+`meet(frame:, placed:)` pairs one vector from each part. A planar direction cannot be the zero vector.
 
-`meet(frame: vector, placed: vector)` pairs one vector from each part. The `planar` vectors must have a direction. A zero anchor, such as `Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)` published on the part, is rejected when the join runs.
+Inside `combine`, the anchors are gone and so is `coords`. `frame - placed` cuts. `frame + placed` keeps both. Those meanings exist only here.
 
-Inside `combine`, the names `frame` and `placed` are the seated solids. Their anchors are not visible, and neither is `coords`. `frame - placed` keeps the frame and cuts the placed solid away. `frame + placed` keeps both. Those two meanings of `+` and `-` exist only in `combine`.
+A join returns a solid with no anchors. Wrap it in `Component` and publish the anchors the next seat needs. One feature per join.
 
-To leave a wall of material, move the frame point:
+To leave a wall of material, move the frame point: `frame.corner.offset(x: wall, y: wall, z: wall)`. A part that should keep the orientation it was built with publishes the same `up` and `right` as the host. Translation is then the only move.
 
-```text
-translation: meet(frame: frame.corner.offset(x: wall, y: wall, z: wall), placed: placed.corner)
-```
+The plate is the script for a grid or a circle of these seats. Copy it.
 
-A part that should keep the orientation it was built with exposes the same `up` and `right` as the frame part. The translation step is then the only one that moves it.
+## The compiler says no
+
+![Cube, a bare minus, a positional call, and a bare number.](/guide/refused.svg)
+
+Each line is one refusal.
+
+- A built-in `Cube`, `Sphere`, or `Cylinder`. Those names exist only when the script defines them.
+- `if`, `for`, `while`, comparisons, and asking a list for its length. Whole numbers are `integers(start:, count:)`.
+- A unary minus, as in `-16.0`. Write `0.0 - 16.0`.
+- Multiplying or dividing a vector by a number.
+- `^`. It is not power.
+- `fn name(...)`, `return`, and a `def` inside a function. Name an inner value with `let name = expression in expression`.
+- A positional call, such as `Brick(40.0, 30.0, 20.0)`. The parameter names are part of the call, in order.
+- A signature that disagrees with the value, such as a `number` result whose value is a vector.
+- `export` of a number, a vector, a raw solid, a bare `join`, or a function that still expects arguments.
+- A `join` whose `frame` or `placed` is a raw solid instead of a component.
+- `Component(solid: coords => ...)` whose value is neither a solid nor a component. Pass `join(...)` as `solid`. A component uses that component's geometry. `solid: coords => join(...)` is rejected, because that coordinate system is `join`'s last parameter.
+- A `parameters` block anywhere except immediately after `setup`.
+- A field the parameter group does not have, and a bare `plate` where the script means `$plate`.
+- Reading an anchor the component did not expose, and reading `vector.x`. Member access reads a field of a parameter group, or an anchor on a component. A tuple has no `pair.0` and no `pair.x`. Take it apart with `let (x, y) = pair in`.
+- A tuple of one value. Parentheses without a comma group an expression: `(1.0 + 2.0)` is the sum.
+- `.` used as composition, and `items |> map` while `map` is still waiting for `f`.
+- `Curve1D`. It does not become a solid, and the workspace does not draw it.
+- `Vector(x:, y:, z:)` without `coords` first, and any expression that tries to construct a coordinate system.
+- `+` or `-` between vectors. Move a point with `offset(x:, y:, z:)`. Combine two vectors with `add(vector:)` or `subtract(vector:)`.
+- An anchor named `coords`. That name is the component's coordinate system.
+- `solid:` written as a value other than `coords =>` a solid or `join(...)`, and `expose:` written as a value instead of `coords =>`.
 
 ## Example: a sphere
 
-There is no sphere primitive. `Sphere` is a function of `radius`, and the export call is where the radius is chosen. One face covers the surface. `u` runs from `0` to `2.0 * pi`, once around. `v` runs from `0` to `pi`, from the top pole to the bottom pole. At both poles `sin(rad: v)` is `0`, so that row of samples meets at one point and the face closes.
+One face. The radius is chosen when you export it. `u` walks once around, and `v` walks from the top pole to the bottom pole.
 
 ```parascript
 setup {
@@ -391,7 +480,7 @@ export(Sphere(radius: 25.0))
 
 ## Example: a box
 
-`Box` is six faces standing on z = 0, with `corner` at the minimum point. The sizes live in `parameters`. `HollowBox` calls `Box` twice. The inner box is seated one wall thickness in from `corner`, and `frame - placed` cuts it out. The inner box stops one wall thickness short of the top, so the floor remains and the top stays open. `origin` is the center, which is the point the viewer hangs the model on.
+Six faces, standing on z = 0, with `corner` at the low corner. `HollowBox` cuts a smaller box out with `frame - placed` and leaves the top open. `origin` is the center.
 
 ```parascript
 setup {
@@ -497,7 +586,7 @@ export(HollowBox)
 
 ## Example: a broom
 
-The handle, the ferrule, and the hanging hole are the same shape. `Cylinder` is that shape, written once, as a function of `radius` and `height`. It names its wall and its two caps with `let`: one `Tube`, and `Disk` at `z: 0.0` and at `z: height`. `Tube` and `Disk` are faces. The handle and the ferrule stand on `up`. The hole is the same call turned by `join`, so its axis lies across the handle, `$hang.from_top` below the handle's top. That axis meets `forward`, the anchor `Cylinder` publishes as `(0, 1, 0)`. Do not write a second cylinder along that other axis. Do not build that direction with `Vector(coords: frame.coords, ...)`. The head and the bristle skirt name their faces with `let`. Each join seats the next part on the anchors the two parts expose, then adds it or cuts it away. `export(Broom)` publishes the finished component. The sizes for this broom live in `parameters`, grouped by part, and the parts read them with `$handle.radius`. `pi` is the number the whole script shares. `Cylinder` receives `radius` and `height` at each call.
+One cylinder, three jobs. The handle, the ferrule, and the hole through the handle are three calls. `join` turns the hole so it lies across the handle.
 
 ```parascript
 setup {
@@ -835,7 +924,7 @@ export(Broom)
 
 ## Example: a plate
 
-The plate is the form to copy for a grid of features and a circle of features. `Box` and `Cylinder` are written once. `vector_grid` returns the points of the hole grid. `circular_pattern` returns the points of the knob circle. `place_components` folds that list. Each step joins one copy of `place` where the host's `corner`, shifted by the point, meets the placed part's `bottom`. `combine: frame => placed => frame - placed` cuts the holes. `combine: frame => placed => frame + placed` keeps the knobs. The lambda is written at the call, and its parameters are named `frame` and `placed`. `fold` is defined in the script. `integers` supplies the counts. A knob is taller than the plate by `$pins.bite` and its base sits that far below the top face, so the cap is inside the plate.
+The plate is the form to copy for a grid of features and a circle of features. Holes use `frame - placed`. Knobs use `frame + placed`.
 
 ```parascript
 setup {
@@ -1039,7 +1128,7 @@ export(Component(
 
 ## Example: a screw
 
-A measurement from a standard sits in the group named for that standard. `head.iso_4017` holds the across-flats width, the head height, and the nominal length. `thread.iso_68_1` holds the pitch. `flat`, `corner`, and `tip` are derived from those fields. The cosine series follows the ISO 68-1 basic profile. Each turn of the thread is its own face. One face for the whole shank would be sampled too coarsely to show the pitch. `pi` is the number the whole script shares.
+A standard measurement sits in a group named for that standard. The head is `iso_4017`. The thread is `iso_68_1`. Each turn of the thread is its own face, so the pitch stays visible.
 
 ```parascript
 setup {
@@ -1229,7 +1318,7 @@ export(M3Screw)
 
 ## Example: a remote
 
-The remote seats many parts on one body with `place_components`. The keys share one `Cylinder`. The rockers share one `Stadium`. The ring is a cylinder with a smaller cylinder cut out of it. The groove is a `Box` cut from the body, and the badge is a `Box` added to it. Positions live in `layout`. Raised parts sit at `$body.rise`, which is `thick - bite`.
+Many parts, one body. The keys share one cylinder. The rockers share one stadium. Positions live in `layout`.
 
 ```parascript
 setup {
@@ -1575,7 +1664,7 @@ export(Component(
 
 ## Example: a car
 
-The car calls `Box` for the body and the cabin, and `Wheel` for every wheel. `Axle` joins two wheels. The cabin sits on the body's `top` and overlaps it by `$cabin.overlap`. Two axles are seated a wheelbase apart. Sizes are grouped by part in `parameters`. Each `join` is wrapped in `Component` so the next mate can read `up`, `right`, and `at`.
+A body, a cabin, and two axles. The cabin sits on the body's `top`. Each `join` is wrapped so the next mate can still read the anchors.
 
 ```parascript
 setup {
@@ -1820,7 +1909,7 @@ export(Car)
 
 ## Example: a desk set
 
-The desk set is a base, three clips, and a shaker. `Box` and `Cylinder` are written once. The clip row is built by seating one `Clip` onto the next at `$clip.pitch`. The shaker is a cup, a bore, a cap, and a ring of vents, and its sizes are nested groups under `shaker`. The shaker stands beside the base, `$shaker.clearance` past the base's edge.
+A base, three clips, and a shaker. The clips are one `Clip` seated again at `$clip.pitch`. The shaker's sizes are nested under `shaker`.
 
 ```parascript
 setup {
@@ -2260,27 +2349,3 @@ def DeskSet =
 
 export(DeskSet)
 ```
-
-## Forms the compiler rejects
-
-- A built-in `Cube`, `Sphere`, or `Cylinder`. Those names exist only when the script defines them.
-- `if`, `for`, `while`, comparisons, and asking a list for its length. Whole numbers are `integers(start:, count:)`.
-- A unary minus, as in `-16.0`. Write `0.0 - 16.0`.
-- Multiplying or dividing a vector by a number.
-- `^`. It is not power.
-- `fn name(...)`, `return`, and a `def` inside a function. Name an inner value with `let name = expression in expression`.
-- A positional call, such as `Brick(40.0, 30.0, 20.0)`. The parameter names are part of the call, in order.
-- A signature that disagrees with the value, such as a `number` result whose value is a vector.
-- `export` of a number, a vector, a raw solid, a bare `join`, or a function that still expects arguments.
-- A `join` whose `frame` or `placed` is a raw solid instead of a component.
-- `Component(solid: coords => ...)` whose value is neither a solid nor a component. Pass `join(...)` as `solid`. A component uses that component's geometry. `solid: coords => join(...)` is rejected, because that coordinate system is `join`'s last parameter.
-- A `parameters` block anywhere except immediately after `setup`.
-- A field the parameter group does not have, and a bare `plate` where the script means `$plate`.
-- Reading an anchor the component did not expose, and reading `vector.x`. Member access reads a field of a parameter group, or an anchor on a component. A tuple has no `pair.0` and no `pair.x`. Take it apart with `let (x, y) = pair in`.
-- A tuple of one value. Parentheses without a comma group an expression: `(1.0 + 2.0)` is the sum.
-- `.` used as composition, and `items |> map` while `map` is still waiting for `f`.
-- `Curve1D`. It does not become a solid, and the workspace does not draw it.
-- `Vector(x:, y:, z:)` without `coords` first, and any expression that tries to construct a coordinate system.
-- `+` or `-` between vectors. Move a point with `offset(x:, y:, z:)`. Combine two vectors with `add(vector:)` or `subtract(vector:)`.
-- An anchor named `coords`. That name is the component's coordinate system.
-- `solid:` written as a value other than `coords =>` a solid or `join(...)`, and `expose:` written as a value instead of `coords =>`.

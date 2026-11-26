@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { modelPrompt, parascriptExamples, renderInline, renderLanguagePage, renderMarkdown, renderPromptPage } from "./markdown.js";
+import { highlightParaScript, parascriptExamples, renderInline, renderLanguagePage, renderMarkdown } from "./markdown.js";
 
 test("markdown rendering escapes text and keeps code fences literal", () => {
     assert.equal(renderInline("a <b> & \"c\""), "a &lt;b&gt; &amp; &quot;c&quot;");
     assert.equal(renderInline("use `a < b` here"), "use <code>a &lt; b</code> here");
-    assert.equal(renderInline("see [language](/language.md)"), "see <a href=\"/language.md\">language</a>");
+    assert.equal(renderInline("see [workspace](/workspace)"), "see <a href=\"/workspace\">workspace</a>");
     assert.equal(renderInline("[x](javascript:alert(1))"), "[x](javascript:alert(1))");
 
     const html = renderMarkdown("# Title\n\n- one `code`\n- <tag>\n\n```parascript\n<script>\n```\n");
@@ -19,43 +19,45 @@ test("a parascript example opens in the workspace", () => {
     const html = renderMarkdown("## Example: a broom\n\n```parascript\nexport(Broom)\n```\n\n```text\nsetup {}\n```\n");
     assert.equal(html.match(/class="example-open"/g)?.length, 1);
     assert.match(html, /<a class="example-open" href="\/workspace\?example=broom">Open in workspace<\/a>/);
-    assert.match(html, /<pre><code>setup \{\}<\/code><\/pre>/);
+    assert.match(html, /<pre><code><span class="kw">setup<\/span> \{\}<\/code><\/pre>/);
 
     const examples = parascriptExamples("## Example: a closed box\n\n```parascript\nexport(Brick)\n```\n## Example: a box with a cavity\n\n```parascript\nexport(HollowBox)\n```\n## Example: a sphere\n\n```text\nnot a script\n```\n## Example: a broom\n\n```parascript\nexport(Broom)\n```\n");
     assert.deepEqual(examples.map((example) => example.id), ["closed-box", "box-with-a-cavity", "broom"]);
     assert.equal(examples[2]?.source, "export(Broom)");
 });
 
+test("a script is colored like the homepage sphere", () => {
+    const colored = highlightParaScript('export(Sphere(radius: 25.0)) // pole\n"mm"');
+    assert.match(colored, /<span class="kw">export<\/span>\(<span class="fn">Sphere<\/span>\(/);
+    assert.match(colored, /<span class="name">radius<\/span>: <span class="num">25\.0<\/span>/);
+    assert.match(colored, /<span class="cmt">\/\/ pole<\/span>/);
+    assert.match(colored, /<span class="str">&quot;mm&quot;<\/span>/);
+    assert.equal(colored.includes("<script"), false);
+
+    const escaped = renderMarkdown("```parascript\n<script>\n```\n");
+    assert.match(escaped, /<pre><code>&lt;script&gt;<\/code><\/pre>/);
+});
+
+test("a guide figure and a remember note render", () => {
+    const html = renderMarkdown("![A face](/guide/face.svg)\n\n> Remember: write the face.\n\n![bad](https://example.com/x.svg)\n");
+    assert.match(html, /<figure class="guide"><img src="\/guide\/face.svg" alt="A face"><figcaption>A face<\/figcaption><\/figure>/);
+    assert.match(html, /<aside class="remember"><p><strong>Remember\.<\/strong> write the face\.<\/p><\/aside>/);
+    assert.equal(html.includes('src="https://example.com'), false);
+});
+
 test("the language page is a document with the rendered reference", () => {
-    const page = renderLanguagePage("# ParaScript language\n\nRead [the text](/language.md).\n");
+    const page = renderLanguagePage("# ParaScript language\n\nRead [the workspace](/workspace).\n");
     assert.match(page, /<title>ParaScript language<\/title>/);
     assert.match(page, /href="\/workspace"/);
     assert.match(page, /href="\/site\.css"/);
+    assert.match(page, /rel="icon" href="\/favicon\.svg"/);
     assert.match(page, /<h1>Write the shape\. The solid follows\.<\/h1>/);
+    assert.match(page, /This page is the language and the standard library/);
     assert.match(page, /<h2>ParaScript language<\/h2>/);
-    assert.match(page, /<a href="\/language\.md">the text<\/a>/);
-    assert.match(page, /href="\/prompt"/);
+    assert.match(page, /<a href="\/workspace">the workspace<\/a>/);
+    assert.equal(page.includes(">Reference<"), false);
+    assert.equal(page.includes("For models"), false);
+    assert.equal(page.includes("/language.md"), false);
+    assert.equal(page.includes('href="/prompt"'), false);
     assert.equal(page.includes("<script"), false);
-});
-
-test("the model prompt is the instruction followed by the reference", () => {
-    const prompt = modelPrompt("ref & <x>\n");
-    assert.match(prompt, /^ParaScript is the language you use to describe one closed solid/);
-    assert.match(prompt, /A face is a formula: two numbers in, one point out/);
-    assert.match(prompt, /That is what the language is for/);
-    assert.match(prompt, /Reply with one complete script and no surrounding explanation/);
-    assert.match(prompt, /The reference is included here in full/);
-    assert.match(prompt, /Copy the smallest example that already does what is asked/);
-    assert.match(prompt, /The plate is the form for a grid or a circle of features/);
-    assert.equal(prompt.endsWith("ref & <x>\n"), true);
-});
-
-test("the prompt page keeps the prompt inside the textarea", () => {
-    const page = renderPromptPage("use </textarea><script>alert(1)</script> & \"x\"");
-    assert.match(page, /<title>ParaScript prompt<\/title>/);
-    assert.match(page, /<textarea id="model-prompt"/);
-    assert.match(page, />Copy prompt</);
-    assert.match(page, /href="\/workspace"/);
-    const field = page.match(/<textarea id="model-prompt"[^>]*>([\s\S]*?)<\/textarea>/);
-    assert.equal(field?.[1], "use &lt;/textarea&gt;&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;x&quot;");
 });

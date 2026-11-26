@@ -2,7 +2,7 @@
 
 > A language model writes language well and does not reliably produce a spatially arranged solid from a prompt. It describes the solid in ParaScript. The workspace turns that script into the solid.
 
-Read the language reference before writing a script. It begins with "Guidance for a language model" and then gives the complete example scripts. The compiler accepts only the forms that page describes. Copy the smallest example that already does the thing you need, and change its parameters. There is no upload API: a person pastes the finished script into the workspace and presses Run solver.
+Read the language reference before writing a script. It begins with "How to write a solid" and then gives the complete example scripts. The compiler accepts only the forms that page describes. Copy the smallest example that already does the thing you need, and change its parameters. There is no upload API: a person pastes the finished script into the workspace and presses Run solver.
 
 Write a shape once and call it wherever that shape appears, including at `export`. Do not copy its faces. Name each face for the surface it is. A cylinder is one `Tube` and two `Disk` calls. `Tube` and `Disk` are 2D faces. `Cylinder` is the solid that calls them. The broom's handle, ferrule, and hanging hole are three calls to one `Cylinder`, and `join` turns the hole.
 
@@ -16,7 +16,7 @@ A `def` may declare a signature. `def same: T => T => number` uses the type vari
 
 ## Lessons
 
-The language page records these lessons under "Guidance for a language model". Follow them when writing a script. The complete scripts on that page are the examples.
+The language page states these lessons as short rules after "How to write a solid", then gives the complete scripts. Follow them when writing a script.
 
 - Write a shape once and call it. A cylinder is one `Tube` and two `Disk` calls. `Tube` is the round wall. `Disk` is a cap. The broom's handle, ferrule, and hanging hole are three calls to one `Cylinder`.
 - A plate is a square box: `Plate` calls `Box(width: $plate.size, depth: $plate.size, height: $plate.thickness)`. The six faces stay in `Box`. That box stands on z = 0 and publishes `corner` at its minimum point. The box example seats a void from that corner.
@@ -40,8 +40,8 @@ Copy one of these scripts from the language page:
 
 ## Language
 
-- [ParaScript language](https://parascript.lindeque.family/language.md): Rules and complete scripts for writing a model.
-- [Prompt](https://parascript.lindeque.family/prompt): The text a person pastes into a language model. It says what ParaScript is for and how to write one closed solid.
+- [ParaScript language](https://parascript.lindeque.family/language): Rules and complete scripts for writing a model.
+- [AI assets](https://parascript.lindeque.family/parascript-assets.md): The prompt and the language in one file a model uses to write a script.
 
 ## Workspace
 

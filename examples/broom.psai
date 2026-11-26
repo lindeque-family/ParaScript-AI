@@ -208,20 +208,18 @@ def Bristles =
     )
 
 def Broom =
-    let handle = Cylinder(
-        radius: $handle.radius,
-        height: $handle.length) in
-    let hang_hole = Cylinder(
-        radius: $hang.radius,
-        height: $handle.radius * 2.0 + 8.0) in
     let socket = $ferrule.height - $ferrule.bite + $handle.embed in
     let handle_bottom = $head.height - $handle.embed in
     let handle_top = handle_bottom + $handle.length in
     let bristle_tip = $bristles.bite - $bristles.height in
     let stick = Component(
         solid: join(
-            frame: handle,
-            placed: hang_hole,
+            frame: Cylinder(
+                    radius: $handle.radius,
+                    height: $handle.length),
+            placed: Cylinder(
+                    radius: $hang.radius,
+                    height: $handle.radius * 2.0 + 8.0),
             using: frame => placed => align(
                 planar: meet(
                     frame: frame.forward,

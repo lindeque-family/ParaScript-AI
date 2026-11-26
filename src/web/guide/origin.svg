@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360">
+  <rect width="800" height="360" fill="#161616"/>
+  <polygon points="330,128 580,228 440,298 190,198" fill="#007acc"/>
+  <polygon points="580,228 440,298 440,246 580,176" fill="#0a4f80"/>
+  <polygon points="330,128 580,228 580,176 330,76" fill="#79c0ef"/>
+  <circle cx="330" cy="128" r="8" fill="#f6d45a" stroke="#1a1a1a" stroke-width="2"/>
+  <line x1="338" y1="120" x2="400" y2="52" stroke="#f6d45a" stroke-width="2"/>
+  <text x="412" y="48" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="26" font-weight="700">origin</text>
+  <text x="400" y="340" text-anchor="middle" fill="#9cdcfe" font-family="Segoe UI, Helvetica, sans-serif" font-size="20">the viewer hangs the model here</text>
+</svg>

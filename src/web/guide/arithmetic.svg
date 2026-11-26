@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 280">
+  <rect width="800" height="280" fill="#161616"/>
+  <text x="200" y="128" text-anchor="middle" fill="#b5cea8" font-family="Consolas, monospace" font-size="32">40.0 + 2.0</text>
+  <text x="200" y="178" text-anchor="middle" fill="#d4d4d4" font-family="Segoe UI, Helvetica, sans-serif" font-size="20">numbers</text>
+  <line x1="400" y1="70" x2="400" y2="210" stroke="#2d2d2d" stroke-width="2"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 1.2 L9 5 L0 8.8 Z" fill="#f6d45a"/>
+    </marker>
+  </defs>
+  <circle cx="470" cy="124" r="7" fill="#f6d45a"/>
+  <line x1="478" y1="124" x2="560" y2="124" stroke="#f6d45a" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="620" y="132" text-anchor="middle" fill="#f6d45a" font-family="Consolas, monospace" font-size="22">offset</text>
+  <text x="590" y="178" text-anchor="middle" fill="#d4d4d4" font-family="Segoe UI, Helvetica, sans-serif" font-size="20">a point</text>
+</svg>

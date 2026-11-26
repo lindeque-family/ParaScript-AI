@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420">
+  <rect width="800" height="420" fill="#161616"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 1.2 L9 5 L0 8.8 Z" fill="#79c0ef"/>
+    </marker>
+  </defs>
+  <path d="M112 118 L112 292 A58 18 0 0 0 228 292 L228 118 Z" fill="#0a4f80"/>
+  <ellipse cx="170" cy="118" rx="58" ry="18" fill="#007acc" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M112 118 L112 292 A58 18 0 0 0 228 292 L228 118" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M112 292 A58 18 0 0 0 228 292" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <text x="170" y="360" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, Helvetica, sans-serif" font-size="26" font-weight="700">Cylinder</text>
+  <line x1="246" y1="150" x2="392" y2="92" stroke="#79c0ef" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="246" y1="200" x2="392" y2="200" stroke="#79c0ef" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="246" y1="250" x2="392" y2="308" stroke="#79c0ef" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M408 48 L408 132 A22 8 0 0 0 452 132 L452 48 Z" fill="#0a4f80"/>
+  <ellipse cx="430" cy="48" rx="22" ry="8" fill="#007acc" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M408 48 L408 132 A22 8 0 0 0 452 132 L452 48" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M408 132 A22 8 0 0 0 452 132" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <text x="478" y="100" fill="#ffffff" font-family="Segoe UI, Helvetica, sans-serif" font-size="26" font-weight="700">handle</text>
+  <path d="M390 176 L390 236 A40 12 0 0 0 470 236 L470 176 Z" fill="#0a4f80"/>
+  <ellipse cx="430" cy="176" rx="40" ry="12" fill="#007acc" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M390 176 L390 236 A40 12 0 0 0 470 236 L470 176" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M390 236 A40 12 0 0 0 470 236" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <text x="490" y="216" fill="#ffffff" font-family="Segoe UI, Helvetica, sans-serif" font-size="26" font-weight="700">ferrule</text>
+  <path d="M414 286 L414 332 A16 6 0 0 0 446 332 L446 286 Z" fill="#0a4f80"/>
+  <ellipse cx="430" cy="286" rx="16" ry="6" fill="#007acc" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M414 286 L414 332 A16 6 0 0 0 446 332 L446 286" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M414 332 A16 6 0 0 0 446 332" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <text x="470" y="318" fill="#ffffff" font-family="Segoe UI, Helvetica, sans-serif" font-size="26" font-weight="700">hole</text>
+</svg>

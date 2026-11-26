@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile, stat } from "node:fs/promises";
 import { resolve, sep, extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { modelPrompt, parascriptExamples, renderLanguagePage, renderPromptPage } from "./markdown.js";
+import { parascriptExamples, renderLanguagePage } from "./markdown.js";
 
 const projectRoot = fileURLToPath(new URL("../..", import.meta.url));
 const distRoot = resolve(projectRoot, "dist");
@@ -19,9 +19,9 @@ const pages: Record<string, string> = {
     "/": webFile("home.html"),
     "/workspace": webFile("index.html"),
     "/index.html": webFile("index.html"),
-    "/language.md": webFile("language.md"),
     "/llms.txt": webFile("llms.txt"),
-    "/site.css": webFile("site.css")
+    "/site.css": webFile("site.css"),
+    "/favicon.svg": webFile("favicon.svg")
 };
 
 const contentTypes: Record<string, string> = {
@@ -31,7 +31,8 @@ const contentTypes: Record<string, string> = {
     ".json": "application/json; charset=utf-8",
     ".map": "application/json; charset=utf-8",
     ".md": "text/markdown; charset=utf-8",
-    ".txt": "text/plain; charset=utf-8"
+    ".txt": "text/plain; charset=utf-8",
+    ".svg": "image/svg+xml"
 };
 
 export function requestPathname(urlPath: string): string | undefined {
@@ -47,6 +48,8 @@ export function resolveRequestFile(urlPath: string): string | undefined {
     if (pathname === undefined) return undefined;
     const page = pages[pathname];
     if (page !== undefined) return page;
+    const guide = /^\/guide\/([a-z0-9-]+\.svg)$/.exec(pathname);
+    if (guide !== null) return webFile(`guide/${guide[1] ?? ""}`);
     if (!pathname.startsWith("/dist/")) return undefined;
     const full = resolve(distRoot, pathname.slice("/dist/".length));
     const prefix = distRoot.endsWith(sep) ? distRoot : distRoot + sep;
@@ -122,18 +125,19 @@ async function sendWorkspaceExample(response: ServerResponse, method: string, ex
     response.end(method === "HEAD" ? undefined : body);
 }
 
-async function sendPrompt(response: ServerResponse, method: string): Promise<void> {
+async function sendAssets(response: ServerResponse, method: string): Promise<void> {
     let markdown: string;
     try {
-        markdown = await readFile(webFile("language.md"), "utf8");
+        markdown = await readFile(webFile("parascript-assets.md"), "utf8");
     } catch {
         sendText(response, 500, "Server error.");
         return;
     }
-    const body = Buffer.from(renderPromptPage(modelPrompt(markdown)));
+    const body = Buffer.from(markdown);
     response.writeHead(200, {
-        "Content-Type": "text/html; charset=utf-8",
+        "Content-Type": "text/markdown; charset=utf-8",
         "Content-Length": body.length,
+        "Content-Disposition": "attachment; filename=\"parascript-assets.md\"",
         "Cache-Control": "no-store"
     });
     response.end(method === "HEAD" ? undefined : body);
@@ -167,8 +171,8 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
         await sendLanguage(response, method);
         return;
     }
-    if (pathname === "/prompt") {
-        await sendPrompt(response, method);
+    if (pathname === "/parascript-assets.md") {
+        await sendAssets(response, method);
         return;
     }
     const exampleId = pathname === "/workspace" || pathname === "/index.html"

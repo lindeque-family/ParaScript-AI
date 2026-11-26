@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420">
+  <rect width="800" height="420" fill="#161616"/>
+  <rect x="40" y="78" width="340" height="250" rx="16" fill="#1e1e1e" stroke="#2d2d2d" stroke-width="2"/>
+  <text x="64" y="128" fill="#c586c0" font-family="Consolas, monospace" font-size="24">parameters</text>
+  <text x="88" y="176" fill="#9cdcfe" font-family="Consolas, monospace" font-size="24">plate</text>
+  <text x="112" y="224" fill="#9cdcfe" font-family="Consolas, monospace" font-size="24">size</text>
+  <text x="250" y="224" fill="#b5cea8" font-family="Consolas, monospace" font-size="24">100.0</text>
+  <text x="112" y="272" fill="#9cdcfe" font-family="Consolas, monospace" font-size="24">thickness</text>
+  <text x="292" y="272" fill="#b5cea8" font-family="Consolas, monospace" font-size="24">8.0</text>
+  <polygon points="500,206 668,283 542,340 374,264" fill="#007acc"/>
+  <polygon points="668,317 542,374 542,340 668,283" fill="#0a4f80"/>
+  <polygon points="500,240 668,317 668,283 500,206" fill="#79c0ef"/>
+  <line x1="488" y1="180" x2="656" y2="257" stroke="#f6d45a" stroke-width="2"/>
+  <line x1="500" y1="206" x2="488" y2="180" stroke="#f6d45a" stroke-width="2"/>
+  <line x1="668" y1="283" x2="656" y2="257" stroke="#f6d45a" stroke-width="2"/>
+  <text x="508" y="158" fill="#f6d45a" font-family="Consolas, monospace" font-size="22">$plate.size</text>
+</svg>

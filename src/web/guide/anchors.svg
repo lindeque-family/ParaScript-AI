@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 470">
+  <rect width="800" height="470" fill="#161616"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 1.2 L9 5 L0 8.8 Z" fill="#f6d45a"/>
+    </marker>
+  </defs>
+  <text x="200" y="48" text-anchor="middle" fill="#9cdcfe" font-family="Segoe UI, Helvetica, sans-serif" font-size="22" font-weight="700">host</text>
+  <polygon points="210,200 336,258 242,301 116,243" fill="#007acc"/>
+  <polygon points="336,338 242,381 242,301 336,258" fill="#0a4f80"/>
+  <polygon points="210,280 336,338 336,258 210,200" fill="#79c0ef"/>
+  <circle cx="210" cy="280" r="6" fill="#f6d45a" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="168" y="308" text-anchor="end" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="20" font-weight="700">corner</text>
+  <line x1="188" y1="292" x2="188" y2="118" stroke="#f6d45a" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="176" y="108" text-anchor="end" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="20" font-weight="700">up</text>
+  <line x1="210" y1="412" x2="350" y2="412" stroke="#f6d45a" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="280" y="444" text-anchor="middle" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="20" font-weight="700">right</text>
+  <text x="640" y="48" text-anchor="middle" fill="#9cdcfe" font-family="Segoe UI, Helvetica, sans-serif" font-size="22" font-weight="700">part</text>
+  <path d="M592 150 L592 286 A48 16 0 0 0 688 286 L688 150 Z" fill="#0a4f80"/>
+  <ellipse cx="640" cy="150" rx="48" ry="16" fill="#007acc" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M592 150 L592 286 A48 16 0 0 0 688 286 L688 150" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <path d="M592 286 A48 16 0 0 0 688 286" fill="none" stroke="#79c0ef" stroke-width="2"/>
+  <circle cx="640" cy="286" r="6" fill="#f6d45a" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="640" y="328" text-anchor="middle" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="20" font-weight="700">bottom</text>
+  <line x1="704" y1="268" x2="704" y2="146" stroke="#f6d45a" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="716" y="136" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="20" font-weight="700">up</text>
+  <line x1="668" y1="360" x2="760" y2="360" stroke="#f6d45a" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="714" y="390" text-anchor="middle" fill="#f6d45a" font-family="Segoe UI, Helvetica, sans-serif" font-size="20" font-weight="700">right</text>
+</svg>
