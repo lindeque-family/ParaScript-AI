@@ -63,7 +63,7 @@ test("tessellationStepsFor keeps multi-face models interactive", () => {
 
 test("Block - Hole cuts a through-hole", async () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def pi = 3.14159265359
         def size = 40.0
         def height = 10.0
@@ -141,7 +141,7 @@ test("Block - Hole cuts a through-hole", async () => {
 
 test("a component value seats in a join", async () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def pi = 3.14159265359
         def size = 40.0
         def height = 10.0
@@ -207,7 +207,7 @@ test("a component value seats in a join", async () => {
 
 test("export is kept when a later value is a number", async () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Face = Component(
             solid: coords => Solid3D(faces: [
                 Surface2D(max_u: 8.0, min_v: u => 0.0, max_v: u => 8.0, formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0))
@@ -257,7 +257,7 @@ const apartByRight = `frame => placed => align(
 
 test("a join union keeps both solids, and a nested subtract cuts the fused solid", async () => {
     const parts = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${solidBox("Left", "10.0", "10.0", "10.0")}
         ${solidBox("Right", "10.0", "10.0", "10.0")}
         ${solidBox("Slab", "40.0", "10.0", "2.0")}
@@ -318,7 +318,7 @@ test("a join union keeps both solids, and a nested subtract cuts the fused solid
 
 test("a component can be the join of two components", async () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${solidBox("Left", "10.0", "10.0", "10.0")}
         ${solidBox("Right", "10.0", "10.0", "10.0")}
         def Pair = Component(
@@ -348,7 +348,7 @@ test("workspace sample meshes through the portal loader", async () => {
 
 test("a join rejects a normal with no direction", async () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Brick = Component(
             solid: coords => Solid3D(faces: [
                 Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0))
@@ -385,7 +385,7 @@ test("a join rejects a normal with no direction", async () => {
 
 test("a meet reads only an anchor the part exposes", async () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Brick = Component(
             solid: coords => Solid3D(faces: [
                 Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0))
@@ -457,7 +457,7 @@ test("exposed anchors seat the void and publish the render origin", async () => 
 
 test("align rotates around the meeting point in the plane", async () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def FramePart = Component(
             solid: coords => Solid3D(faces: [
                 Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0))
@@ -508,7 +508,7 @@ test("align rotates around the meeting point in the plane", async () => {
 
 test("align makes the planes parallel before it translates", async () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def FramePart = Component(
             solid: coords => Solid3D(faces: [
                 Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v))
@@ -677,6 +677,154 @@ test("M3 screw has a 0.5 mm thread and a hexagon head", async () => {
     }
     assert.ok(outward > inward * 20, `outward ${outward} inward ${inward}`);
 });
+
+test("a flat face in a boolean is two triangles and a round wall keeps the curve", () => {
+    const flat = tessellateFaces([face()], 12, true);
+    assert.equal(flat.indices.length, 6);
+    const dense = tessellateFaces([face()], 12);
+    assert.equal(dense.indices.length, 12 * 12 * 6);
+    const wall: SurfaceFace = {
+        tag: "Surface2D",
+        maxU: Math.PI * 2,
+        minV: 0,
+        maxV: 8,
+        formula: (u: number) => (v: number) => ({ x: Math.cos(u), y: Math.sin(u), z: v })
+    };
+    const round = tessellateFaces([wall], 12, true);
+    assert.equal(round.indices.length, 12 * 6);
+    const sphere: SurfaceFace = {
+        tag: "Surface2D",
+        maxU: Math.PI * 2,
+        minV: 0,
+        maxV: Math.PI,
+        formula: (u: number) => (v: number) => ({
+            x: Math.cos(u) * Math.sin(v),
+            y: Math.sin(u) * Math.sin(v),
+            z: Math.cos(v)
+        })
+    };
+    const curved = tessellateFaces([sphere], 4, true);
+    assert.equal(curved.indices.length, 4 * 4 * 6);
+});
+
+test("Box is twelve triangles and a taller Cylinder cuts a hole through it", async () => {
+    const boxSource = `
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        export(Box(width: 10.0, depth: 20.0, height: 30.0))
+    `;
+    const boxCompiled = compileParaScriptSource(boxSource);
+    assert.equal(boxCompiled.success, true, boxCompiled.errorMessage ?? "");
+    const boxPart = await evaluateModelModule(boxCompiled.javascriptCode ?? "");
+    assert.deepEqual(anchorPoint(boxPart, "bottom"), { x: 5, y: 10, z: 0 });
+    assert.deepEqual(anchorPoint(boxPart, "top"), { x: 5, y: 10, z: 30 });
+    assert.deepEqual(anchorPoint(boxPart, "corner"), { x: 0, y: 0, z: 0 });
+    assert.deepEqual(anchorPoint(boxPart, "origin"), { x: 0, y: 0, z: 0 });
+    const box = modelMesh(boxPart);
+    assert.equal(box.indices.length / 3, 12);
+    assert.equal(pointInsideMesh(box, { x: 1, y: 2, z: 3 }), true);
+    assert.equal(pointInsideMesh(box, { x: -1, y: 2, z: 3 }), false);
+
+    const source = `
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def Cut = Component(
+            solid: join(
+                frame: Box(width: 40.0, depth: 40.0, height: 10.0),
+                placed: Cylinder(radius: 5.0, height: 12.0),
+                using: frame => placed => align(
+                    planar: meet(frame: frame.up, placed: placed.up),
+                    translation: meet(frame: frame.corner.offset(x: 20.0, y: 20.0, z: 0.0 - 1.0), placed: placed.bottom),
+                    rotation: meet(frame: frame.right, placed: placed.right)
+                ),
+                combine: frame => placed => frame - placed
+            ),
+            expose: coords => {}
+        )
+        export(Cut)
+    `;
+    const compiled = compileParaScriptSource(source);
+    assert.equal(compiled.success, true, compiled.errorMessage ?? "");
+    const mesh = modelMesh(await evaluateModelModule(compiled.javascriptCode ?? ""));
+    assert.equal(pointInsideMesh(mesh, { x: 2, y: 2, z: 5 }), true);
+    assert.equal(pointInsideMesh(mesh, { x: 20, y: 20, z: 5 }), false);
+    assert.ok(mesh.indices.length / 3 < 500);
+});
+
+test("Sphere is centered on the origin and cuts a cavity out of a box", async () => {
+    const source = `
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        export(Sphere(radius: 10.0))
+    `;
+    const compiled = compileParaScriptSource(source);
+    assert.equal(compiled.success, true, compiled.errorMessage ?? "");
+    const part = await evaluateModelModule(compiled.javascriptCode ?? "");
+    assert.deepEqual(anchorPoint(part, "origin"), { x: 0, y: 0, z: 0 });
+    assert.deepEqual(anchorPoint(part, "center"), { x: 0, y: 0, z: 0 });
+    assert.deepEqual(anchorPoint(part, "top"), { x: 0, y: 0, z: 10 });
+    assert.deepEqual(anchorPoint(part, "bottom"), { x: 0, y: 0, z: -10 });
+    const mesh = modelMesh(part);
+    assert.equal(mesh.indices.length / 3, 528);
+    assert.equal(normalsPointOutward(mesh), true);
+    assert.equal(pointInsideMesh(mesh, { x: 0, y: 0, z: 0 }), true);
+    assert.equal(pointInsideMesh(mesh, { x: 0, y: 0, z: 9 }), true);
+    assert.equal(pointInsideMesh(mesh, { x: 0, y: 0, z: 11 }), false);
+
+    const cutSource = `
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def Cut = Component(
+            solid: join(
+                frame: Box(width: 40.0, depth: 40.0, height: 40.0),
+                placed: Sphere(radius: 10.0),
+                using: frame => placed => align(
+                    planar: meet(frame: frame.up, placed: placed.up),
+                    translation: meet(frame: frame.corner.offset(x: 20.0, y: 20.0, z: 20.0), placed: placed.origin),
+                    rotation: meet(frame: frame.right, placed: placed.right)
+                ),
+                combine: frame => placed => frame - placed
+            ),
+            expose: coords => {}
+        )
+        export(Cut)
+    `;
+    const cutCompiled = compileParaScriptSource(cutSource);
+    assert.equal(cutCompiled.success, true, cutCompiled.errorMessage ?? "");
+    const cut = modelMesh(await evaluateModelModule(cutCompiled.javascriptCode ?? ""));
+    assert.equal(pointInsideMesh(cut, { x: 2, y: 2, z: 2 }), true);
+    assert.equal(pointInsideMesh(cut, { x: 20, y: 20, z: 20 }), false);
+});
+
+function normalsPointOutward(mesh: { positions: ArrayLike<number>; indices: ArrayLike<number> }): boolean {
+    const positions = mesh.positions;
+    const indices = mesh.indices;
+    for (let index = 0; index < indices.length; index += 3) {
+        const a = (indices[index] ?? 0) * 3;
+        const b = (indices[index + 1] ?? 0) * 3;
+        const c = (indices[index + 2] ?? 0) * 3;
+        const ax = positions[a] ?? 0;
+        const ay = positions[a + 1] ?? 0;
+        const az = positions[a + 2] ?? 0;
+        const e1x = (positions[b] ?? 0) - ax;
+        const e1y = (positions[b + 1] ?? 0) - ay;
+        const e1z = (positions[b + 2] ?? 0) - az;
+        const e2x = (positions[c] ?? 0) - ax;
+        const e2y = (positions[c + 1] ?? 0) - ay;
+        const e2z = (positions[c + 2] ?? 0) - az;
+        const nx = e1y * e2z - e1z * e2y;
+        const ny = e1z * e2x - e1x * e2z;
+        const nz = e1x * e2y - e1y * e2x;
+        const cx = (ax + (positions[b] ?? 0) + (positions[c] ?? 0)) / 3;
+        const cy = (ay + (positions[b + 1] ?? 0) + (positions[c + 1] ?? 0)) / 3;
+        const cz = (az + (positions[b + 2] ?? 0) + (positions[c + 2] ?? 0)) / 3;
+        if (nx * cx + ny * cy + nz * cz <= 0) return false;
+    }
+    return true;
+}
+
+function anchorPoint(part: unknown, name: string): { x: number; y: number; z: number } {
+    assert.ok(isRecord(part) && isRecord(part.anchors));
+    const vector = part.anchors[name];
+    assert.ok(isRecord(vector) && typeof vector.x === "number" && typeof vector.y === "number" && typeof vector.z === "number");
+    return { x: vector.x, y: vector.y, z: vector.z };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;

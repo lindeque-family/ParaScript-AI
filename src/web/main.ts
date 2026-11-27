@@ -147,6 +147,11 @@ async function runSolver(): Promise<void> {
     }
 }
 
+function downloadFilename(disposition: string | null): string {
+    const match = /filename="([^"]+)"/.exec(disposition ?? "");
+    return match?.[1] ?? "solid.stl";
+}
+
 async function downloadStl(): Promise<void> {
     hideStatus();
     stlBtn.disabled = true;
@@ -164,7 +169,7 @@ async function downloadStl(): Promise<void> {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = "solid.stl";
+        link.download = downloadFilename(response.headers.get("Content-Disposition"));
         document.body.append(link);
         link.click();
         link.remove();

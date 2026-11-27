@@ -1,4 +1,5 @@
 setup {
+    name: "Plate",
     units: "mm",
     coordinate_system: "Z-up"
 }
@@ -27,11 +28,6 @@ parameters {
 // pi is a value the whole script shares.
 def pi = 3.14159265359
 
-def fold: (item: T => accumulator: A => A) => (initial: A) => (list: [T]) => A = f => initial => list => match list {
-    [] => initial,
-    head :: tail => f(item: head, accumulator: fold(f: f, initial: initial, list: tail))
-}
-
 def vector_grid = start_u => end_u => count_u => start_v => end_v => count_v => point =>
     let grid = u_count => v_count =>
         let us = integers(start: 0.0, count: u_count) in
@@ -53,91 +49,6 @@ def vector_grid = start_u => end_u => count_u => start_v => end_v => count_v => 
         u: start_u + (u * step_u),
         v: start_v + (v * step_v)
     ))
-
-def Box = width => depth => height =>
-    Component(
-        solid: coords =>
-            let top = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
-            let bottom = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
-            let front = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
-            let back = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
-            let left = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: 0, y: u, z: v)) in
-            let right = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
-            Solid3D(faces: [
-                top,
-                bottom,
-                front,
-                back,
-                left,
-                right
-            ]),
-        expose: coords => {
-            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
-        }
-    )
-
-def Cylinder = radius => height =>
-    let Disk = coords => radius => z => Surface2D(
-        max_u: 2.0 * pi,
-        min_v: u => 0.0, max_v: u => radius,
-        formula: u => v => Vector(coords: coords, 
-            x: v * cos(rad: u),
-            y: v * sin(rad: u),
-            z: z
-        )
-    ) in
-    let Tube = coords => radius => height => Surface2D(
-        max_u: 2.0 * pi,
-        min_v: u => 0.0, max_v: u => height,
-        formula: u => v => Vector(coords: coords, 
-            x: radius * cos(rad: u),
-            y: radius * sin(rad: u),
-            z: v
-        )
-    ) in
-    Component(
-        solid: coords =>
-            let bottom = Disk(coords: coords, radius: radius, z: 0.0) in
-            let top = Disk(coords: coords, radius: radius, z: height) in
-            Solid3D(faces: [
-                Tube(coords: coords, radius: radius, height: height),
-                bottom,
-                top
-            ]),
-        expose: coords => {
-            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
-            top: Vector(coords: coords, x: 0.0, y: 0.0, z: height),
-            center: Vector(coords: coords, x: 0.0, y: 0.0, z: height / 2.0)
-        }
-    )
 
 def place_components = host => points => place => combine => fold(
     f: item => accumulator => Component(

@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { compileParaScriptSource } from "../parascript/compile.js";
 import { parascriptExamples, renderLanguagePage } from "./markdown.js";
 import { evaluateModelModule, modelMesh } from "./model.js";
-import { meshToStl } from "./stl.js";
+import { meshToStl, stlFilename } from "./stl.js";
 
 const maxScriptBytes = 100_000_000;
 
@@ -231,7 +231,7 @@ async function sendStl(request: IncomingMessage, response: ServerResponse): Prom
         response.writeHead(200, {
             "Content-Type": "model/stl",
             "Content-Length": stl.length,
-            "Content-Disposition": "attachment; filename=\"solid.stl\"",
+            "Content-Disposition": `attachment; filename="${stlFilename(compiled.name)}"`,
             "Cache-Control": "no-store"
         });
         response.end(stl);

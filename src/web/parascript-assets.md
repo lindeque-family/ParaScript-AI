@@ -1,8 +1,8 @@
-ParaScript is the language you use to describe one closed solid. A face is a formula: two numbers in, one point out. A part is a function of its sizes. A join seats one part on another by the anchors they share, then keeps both solids or cuts one away. You write the faces and export one component. The workspace compiles that script and draws the solid. That is what the language is for: a description a compiler can build, with a facing and a place for every surface.
+ParaScript is the language you use to describe one closed solid. A face is a formula: two numbers in, one point out. A part is a function of its sizes. A join seats one part on another by the anchors they share, then keeps both solids or cuts one away. `Sphere(radius:)`, `Box(width:, depth:, height:)`, and `Cylinder(radius:, height:)` are already parts. You write every other face and export one component. The workspace compiles that script and draws the solid. That is what the language is for: a description a compiler can build, with a facing and a place for every surface.
 
 A person will describe the solid they want. Reply with one complete script and no surrounding explanation. They open https://parascript.lindeque.family/ and paste that script, then press Run solver.
 
-Use only the forms in this file. Copy the sphere when the solid is one face. Copy the plate when parts repeat on a grid or a circle, and change its parameters. A measurement from a standard sits in a group named for that standard. One shape seated several times is one function, called at each join.
+Use only the forms in this file. Copy the sphere when the solid is a ball. Copy the plate when parts repeat on a grid or a circle, and change its parameters. A measurement from a standard sits in a group named for that standard. One shape seated several times is one function, called at each join.
 
 ## Script
 
@@ -10,12 +10,13 @@ A script is `setup`, then `parameters` when the model has sizes, then top-level 
 
 ```text
 setup {
+    name: "model name",
     units: "mm",
     coordinate_system: "Z-up"
 }
 ```
 
-`units` is `"mm"` or `"inch"`. The numbers are already in that unit. `coordinate_system` is `"Z-up"`, `"Y-up"`, or `"X-up"`. Write coordinates in that system. The viewer uses it to choose which axis is up. `setup` has those two fields and no others. That string is not a value a script can pass to `Vector`.
+`name` is required. It is the model's name. The downloaded STL file uses that name. `units` is `"mm"` or `"inch"`. The numbers are already in that unit. `coordinate_system` is `"Z-up"`, `"Y-up"`, or `"X-up"`. Write coordinates in that system. The viewer uses it to choose which axis is up. That string is not a value a script can pass to `Vector`. `setup` requires `name`, and it also has `units` and `coordinate_system`.
 
 ## Functions
 
@@ -166,7 +167,7 @@ That is `[0.0, 1.0, 2.0, 3.0, 4.0]`. `integers(start: 0.0, count: 0.0)` is `[]`.
 filter(predicate: item => true, list: [1.0, 2.0])
 ```
 
-The language does not provide `fold`. The plate script below defines a right fold. The last list item is visited first. Disjoint parts stay equivalent.
+`fold(f:, initial:, list:)` is a right fold. The last list item is visited first. `f` is `item => accumulator =>`. An empty list returns `initial`. A script may define `fold`, and that definition replaces this one. Disjoint parts stay equivalent.
 
 A tuple holds a fixed number of values of their own types. It has at least two elements. `(1.0 + 2.0)` has no comma, so the parentheses group the sum. There is no `pair.0` and no `pair.x`.
 
@@ -249,42 +250,21 @@ A placed cap that would lie on the host face should overlap the host by a small 
 
 ## Sphere
 
-There is no sphere primitive. One face covers it. `u` runs once around. `v` runs from the top pole to the bottom pole. At both poles the samples meet at one point.
+`Sphere(radius:)` is centered on the origin. The radius is a number greater than zero. `origin` and `center` are `(0, 0, 0)`. `top` is `(0, 0, radius)` and `bottom` is `(0, 0, 0 - radius)`. `up` is `(0, 0, 1)`, `right` is `(1, 0, 0)`, and `forward` is `(0, 1, 0)`. A script that defines `Sphere` uses its own definition. The radius is chosen at the call.
 
 ```parascript
 setup {
+    name: "Sphere",
     units: "mm",
     coordinate_system: "Z-up"
 }
-
-def pi = 3.14159265359
-
-def Sphere = radius => Component(
-    solid: coords => Solid3D(faces: [
-        Surface2D(
-            max_u: 2.0 * pi,
-            min_v: u => 0.0,
-            max_v: u => pi,
-            formula: u => v => Vector(coords: coords,
-                x: radius * cos(rad: u) * sin(rad: v),
-                y: radius * sin(rad: u) * sin(rad: v),
-                z: radius * cos(rad: v)
-            )
-        )
-    ]),
-    expose: coords => {
-        up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-        origin: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
-    }
-)
 
 export(Sphere(radius: 25.0))
 ```
 
 ## Plate
 
-There is no box or cylinder primitive. `Box` is six faces, standing on z = 0, with `corner` at the minimum point. `Cylinder` is one wall and two caps. A host that receives parts exposes `up`, `right`, and `corner`. A part that is seated exposes `up`, `right`, and `bottom`. `place` is one component for every point, not a function of the point. The point is added to `corner` and meets `bottom`.
+`Box(width:, depth:, height:)` stands on z = 0, from `(0, 0, 0)` to `(width, depth, height)`. `corner` and `origin` are `(0, 0, 0)`. `bottom` is the center of the face on z = 0, `(width / 2, depth / 2, 0)`. `top` is the center of the top face, `(width / 2, depth / 2, height)`. `up` is `(0, 0, 1)` and `right` is `(1, 0, 0)`. `Cylinder(radius:, height:)` stands on that axis. `bottom` is `(0, 0, 0)`, `top` is `(0, 0, height)`, and `center` is `(0, 0, height / 2)`. `forward` is `(0, 1, 0)` and `origin` is `(0, 0, 0)`. Width, depth, height, and radius are numbers greater than zero. The plate calls these parts. A host that receives parts exposes `up`, `right`, and `corner`. A part that is seated exposes `up`, `right`, and `bottom`. `place` is one component for every point, not a function of the point. The point is added to `corner` and meets `bottom`.
 
 `vector_grid` needs a count of at least 2 on each side, because the step divides by `count - 1`. The hole grid below runs from `margin + radius` to `size - margin - radius`. The circle is centered on the plate. A hole is cut and is as tall as the plate. A knob is kept. Its base sits at `thickness - bite` and its height is `thickness + bite`, so the cap crosses the top face.
 
@@ -292,6 +272,7 @@ A hollow body is the same `Box` twice. Seat the inner box with `frame.corner.off
 
 ```parascript
 setup {
+    name: "Plate",
     units: "mm",
     coordinate_system: "Z-up"
 }
@@ -317,11 +298,6 @@ parameters {
 
 def pi = 3.14159265359
 
-def fold: (item: T => accumulator: A => A) => (initial: A) => (list: [T]) => A = f => initial => list => match list {
-    [] => initial,
-    head :: tail => f(item: head, accumulator: fold(f: f, initial: initial, list: tail))
-}
-
 def vector_grid = start_u => end_u => count_u => start_v => end_v => count_v => point =>
     let grid = u_count => v_count =>
         let us = integers(start: 0.0, count: u_count) in
@@ -343,84 +319,6 @@ def vector_grid = start_u => end_u => count_u => start_v => end_v => count_v => 
         u: start_u + (u * step_u),
         v: start_v + (v * step_v)
     ))
-
-def Box = width => depth => height =>
-    Component(
-        solid: coords =>
-            let top = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
-            let bottom = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
-            let front = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
-            let back = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
-            let left = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: 0, y: u, z: v)) in
-            let right = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
-            Solid3D(faces: [ top, bottom, front, back, left, right ]),
-        expose: coords => {
-            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
-        }
-    )
-
-def Cylinder = radius => height =>
-    let Disk = coords => radius => z => Surface2D(
-        max_u: 2.0 * pi,
-        min_v: u => 0.0, max_v: u => radius,
-        formula: u => v => Vector(coords: coords,
-            x: v * cos(rad: u),
-            y: v * sin(rad: u),
-            z: z
-        )
-    ) in
-    let Tube = coords => radius => height => Surface2D(
-        max_u: 2.0 * pi,
-        min_v: u => 0.0, max_v: u => height,
-        formula: u => v => Vector(coords: coords,
-            x: radius * cos(rad: u),
-            y: radius * sin(rad: u),
-            z: v
-        )
-    ) in
-    Component(
-        solid: coords =>
-            let bottom = Disk(coords: coords, radius: radius, z: 0.0) in
-            let top = Disk(coords: coords, radius: radius, z: height) in
-            Solid3D(faces: [
-                Tube(coords: coords, radius: radius, height: height),
-                bottom,
-                top
-            ]),
-        expose: coords => {
-            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
-            top: Vector(coords: coords, x: 0.0, y: 0.0, z: height),
-            center: Vector(coords: coords, x: 0.0, y: 0.0, z: height / 2.0)
-        }
-    )
 
 def place_components = host => points => place => combine => fold(
     f: item => accumulator => Component(
@@ -481,7 +379,7 @@ export(Component(
 
 ## Rejected
 
-- A built-in `Cube`, `Sphere`, or `Cylinder`. Those names exist only when the script defines them.
+- A built-in `Cube`. `Sphere`, `Box`, `Cylinder`, and `fold` are already in the language. A script may define the same name, and that definition replaces the built-in one.
 - `if`, `for`, `while`, comparisons, and a length of a list.
 - A unary minus, power, and multiplying or dividing a vector by a number.
 - `+` or `-` between vectors. Inside `combine`, those operators are the seated solids.

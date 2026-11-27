@@ -1,4 +1,5 @@
 setup {
+    name: "M3 screw",
     units: "mm",
     coordinate_system: "Z-up"
 }

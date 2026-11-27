@@ -8,11 +8,11 @@
     "example": "examples"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/web/earcut.js dist/web/earcut.js",
     "clean": "rm -rf dist",
     "rebuild": "npm run clean && npm run build",
-    "start": "tsc && node dist/web/server.js",
-    "test": "tsc && node --test dist/**/*.test.js"
+    "start": "npm run build && node dist/web/server.js",
+    "test": "npm run build && node --test dist/**/*.test.js"
   },
   "repository": {
     "type": "git",

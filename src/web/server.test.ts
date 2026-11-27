@@ -112,7 +112,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(landingHtml, /See how it works/);
         assert.match(landingHtml, /rel="icon" href="\/favicon\.svg"/);
         assert.match(landingHtml, /class="sample"/);
-        assert.match(landingHtml, /A sphere is one face/);
+        assert.match(landingHtml, /Sphere\(radius:\) is centered on the origin/);
         assert.match(landingHtml, /export<\/span>\(<span class="fn">Sphere<\/span>/);
         assert.match(landingHtml, /href="\/workspace\?example=sphere"/);
         assert.match(landingHtml, /href="\/parascript-assets\.md"/);
@@ -190,7 +190,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(referenceHtml, /<span class="fn">PlateWithKnobs<\/span>/);
         assert.match(referenceHtml, /<span class="str">/);
         assert.match(referenceHtml, /<span class="cmt">/);
-        assert.equal(referenceHtml.match(/Open in workspace/g)?.length, 8);
+        assert.equal(referenceHtml.match(/Open in workspace/g)?.length, 9);
         assert.match(referenceHtml, /href="\/workspace\?example=sphere"/);
         assert.match(referenceHtml, /href="\/workspace\?example=box"/);
         assert.match(referenceHtml, /href="\/workspace\?example=broom"/);
@@ -199,6 +199,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.match(referenceHtml, /href="\/workspace\?example=remote"/);
         assert.match(referenceHtml, /href="\/workspace\?example=car"/);
         assert.match(referenceHtml, /href="\/workspace\?example=desk-set"/);
+        assert.match(referenceHtml, /href="\/workspace\?example=m"/);
         assert.match(referenceHtml, /The handle, the ferrule, and the hole through the handle are three calls/);
         assert.match(referenceHtml, /<span class="fn">Tube<\/span>/);
         assert.match(referenceHtml, /<span class="fn">Box<\/span>/);
@@ -265,7 +266,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         assert.equal(indexText.includes("/language.md"), false);
         assert.match(indexText, /\/parascript-assets\.md/);
         assert.equal(indexText.includes("/prompt"), false);
-        assert.match(indexText, /three calls to one/);
+        assert.match(indexText, /three calls to `Cylinder\(radius:, height:\)`/);
         assert.match(indexText, /How to write a solid/);
         assert.match(indexText, /\$plate\.size/);
         assert.match(indexText, /## Lessons/);
@@ -284,6 +285,7 @@ test("server returns the workspace page and blocks traversal", async () => {
         const moduleText = await moduleResponse.text();
         assert.match(moduleText, /compileParaScriptSource/);
         assert.match(moduleText, /fetch\("\/stl"/);
+        assert.match(moduleText, /Content-Disposition/);
         assert.match(moduleText, /solid-sides/);
         assert.match(moduleText, /setSolid\(solidSides\.checked\)/);
         assert.match(moduleText, /setUpAxis/);
@@ -307,6 +309,7 @@ test("server returns the workspace page and blocks traversal", async () => {
 });
 
 const squareScript = `setup {
+    name: "Square plate",
     units: "mm",
     coordinate_system: "Z-up"
 }
@@ -340,12 +343,19 @@ test("POST /stl returns the mesh as a binary STL", async () => {
         });
         assert.equal(response.status, 200);
         assert.match(response.headers.get("content-type") ?? "", /model\/stl/);
-        assert.match(response.headers.get("content-disposition") ?? "", /attachment;\s*filename="solid\.stl"/);
+        assert.match(response.headers.get("content-disposition") ?? "", /attachment;\s*filename="Square plate\.stl"/);
         const body = Buffer.from(await response.arrayBuffer());
         const compiled = compileParaScriptSource(squareScript);
         const expected = meshToStl(modelMesh(await evaluateModelModule(compiled.javascriptCode ?? "")));
         assert.deepEqual(body, expected);
         assert.ok(body.readUInt32LE(80) > 0);
+
+        const unnamed = await fetch(`${base}/stl`, {
+            method: "POST",
+            body: "setup { units: \"mm\", coordinate_system: \"Z-up\" }\nexport(Square)\n"
+        });
+        assert.equal(unnamed.status, 400);
+        assert.match(await unnamed.text(), /Setup requires a name/);
 
         const refused = await fetch(`${base}/stl`, { method: "POST", body: "export(1.0)\n" });
         assert.equal(refused.status, 400);

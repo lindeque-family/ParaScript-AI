@@ -1,28 +1,7 @@
 setup {
+    name: "Sphere",
     units: "mm",
     coordinate_system: "Z-up"
 }
-
-def pi = 3.14159265359
-
-def Sphere = radius => Component(
-    solid: coords => Solid3D(faces: [
-        Surface2D(
-            max_u: 2.0 * pi,
-            min_v: u => 0.0,
-            max_v: u => pi,
-            formula: u => v => Vector(coords: coords, 
-                x: radius * cos(rad: u) * sin(rad: v),
-                y: radius * sin(rad: u) * sin(rad: v),
-                z: radius * cos(rad: v)
-            )
-        )
-    ]),
-    expose: coords => {
-        up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-        right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-        origin: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
-    }
-)
 
 export(Sphere(radius: 25.0))

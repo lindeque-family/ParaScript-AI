@@ -615,6 +615,13 @@ export class TypeInferenceEngine {
         if (pruned.tag === "Component" && pruned.open && copyOpen) {
             return { tag: "Component", anchors: [...pruned.anchors], open: true };
         }
+        // A finished part copies its anchor list. The standard Box and Cylinder share one
+        // type object, and a definition must not stamp its name onto that object.
+        if (pruned.tag === "Component" && !pruned.open && copyOpen) {
+            return pruned.name === undefined
+                ? { tag: "Component", anchors: [...pruned.anchors] }
+                : { tag: "Component", anchors: [...pruned.anchors], name: pruned.name };
+        }
         return pruned;
     }
     private getFreeVariables(t: Type, set: Set<number> = new Set()): Set<number> {
@@ -954,6 +961,51 @@ export class TypeInferenceEngine {
                 tag: "Function", paramName: "count", parameter: tFloat, returnType: {
                     tag: "Array", elementType: tFloat
                 }
+            }
+        }));
+
+        // fold(f: item => accumulator => A, initial: A, list: [T]) -> A. The last item is visited first.
+        const foldItem = createFreshVariable();
+        const foldAccumulator = createFreshVariable();
+        env.extend("fold", new TypeSchema([foldItem.id, foldAccumulator.id], {
+            tag: "Function", paramName: "f", parameter: {
+                tag: "Function", paramName: "item", parameter: foldItem, returnType: {
+                    tag: "Function", paramName: "accumulator", parameter: foldAccumulator, returnType: foldAccumulator
+                }
+            }, returnType: {
+                tag: "Function", paramName: "initial", parameter: foldAccumulator, returnType: {
+                    tag: "Function", paramName: "list", parameter: { tag: "Array", elementType: foldItem }, returnType: foldAccumulator
+                }
+            }
+        }));
+
+        // Box(width, depth, height) stands on z = 0. A script that defines Box replaces this part.
+        env.extend("Box", new TypeSchema([], {
+            tag: "Function", paramName: "width", parameter: tFloat, returnType: {
+                tag: "Function", paramName: "depth", parameter: tFloat, returnType: {
+                    tag: "Function", paramName: "height", parameter: tFloat, returnType: {
+                        tag: "Component",
+                        anchors: ["up", "right", "corner", "bottom", "top", "origin"]
+                    }
+                }
+            }
+        }));
+
+        // Cylinder(radius, height) stands on the same axis. A script that defines Cylinder replaces this part.
+        env.extend("Cylinder", new TypeSchema([], {
+            tag: "Function", paramName: "radius", parameter: tFloat, returnType: {
+                tag: "Function", paramName: "height", parameter: tFloat, returnType: {
+                    tag: "Component",
+                    anchors: ["up", "right", "forward", "bottom", "top", "center", "origin"]
+                }
+            }
+        }));
+
+        // Sphere(radius) is centered on the origin. A script that defines Sphere replaces this part.
+        env.extend("Sphere", new TypeSchema([], {
+            tag: "Function", paramName: "radius", parameter: tFloat, returnType: {
+                tag: "Component",
+                anchors: ["up", "right", "forward", "bottom", "top", "center", "origin"]
             }
         }));
 

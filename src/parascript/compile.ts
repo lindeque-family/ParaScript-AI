@@ -7,6 +7,8 @@ export interface CompilationResult {
     javascriptCode?: string;
     errorMessage?: string;
     coordinateSystem?: "Z-up" | "Y-up" | "X-up";
+    /** The required setup name. Present on a successful compile. */
+    name?: string;
 }
 
 export function compileParaScriptSource(source: string): CompilationResult {
@@ -19,7 +21,8 @@ export function compileParaScriptSource(source: string): CompilationResult {
         return {
             success: true,
             javascriptCode: generator.generate(ast),
-            coordinateSystem: ast.setup.coordinateSystem
+            coordinateSystem: ast.setup.coordinateSystem,
+            name: ast.setup.name
         };
     } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : "Unknown Compilation System Fault.";

@@ -39,7 +39,7 @@ function assertPartialJoin(type: ReturnType<typeof prune>): void {
 // ----------------------------------------------------------------------------
 test("Infers Primitive Floats and Overloaded Component Arithmetic", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def scalar_a = 40.0
         def scalar_b = 10.0
         def combined_scalar = scalar_a + scalar_b
@@ -80,7 +80,7 @@ test("Infers Primitive Floats and Overloaded Component Arithmetic", () => {
 // ----------------------------------------------------------------------------
 test("Successfully Resolves Curried Named Call Expressions", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def MockPart = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x:u, y:v, z:0))]),
             expose: coords => {
@@ -120,7 +120,7 @@ test("Successfully Resolves Curried Named Call Expressions", () => {
 // ----------------------------------------------------------------------------
 test("Compiler Catches and Rejects Invalid Keyword Arguments", () => {
     const invalidKeywordSource = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Mark = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => {
@@ -145,7 +145,7 @@ test("Compiler Catches and Rejects Invalid Keyword Arguments", () => {
 // ----------------------------------------------------------------------------
 test("Infers Chained Cons Lists and Unifies Destructuring Matches", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def tail_array = [1.0]
         def expanded_array = 10.0 :: tail_array
         
@@ -170,7 +170,7 @@ test("Infers Chained Cons Lists and Unifies Destructuring Matches", () => {
 // ----------------------------------------------------------------------------
 test("Verifies Analytical Derivative Functions Match Smooth Manifolds", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         
         def Origin = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
@@ -196,7 +196,7 @@ test("Verifies Analytical Derivative Functions Match Smooth Manifolds", () => {
 // ----------------------------------------------------------------------------
 test("Enforces Let-Polymorphism Generalisation and Multiple Instantiation", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         // Generic identity lambda: a => a (Inferred as alpha -> alpha)
         def identity = x => x
         def Origin = Component(
@@ -222,7 +222,7 @@ test("Enforces Let-Polymorphism Generalisation and Multiple Instantiation", () =
 
 test("a repeated name in a signature is one type variable", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Origin = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => {
@@ -244,7 +244,7 @@ test("a repeated name in a signature is one type variable", () => {
 
 test("a shared signature variable rejects a call with two types", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Origin = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => { at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0) }
@@ -257,7 +257,7 @@ test("a shared signature variable rejects a call with two types", () => {
 
 test("a signature is checked against the body", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Origin = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => { at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0) }
@@ -269,7 +269,7 @@ test("a signature is checked against the body", () => {
 
 test("a named signature parameter must match the value", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def map: (item: T => U) => (list: [T]) => [U] = f => list => match list {
             [] => [],
             head :: tail => f(item: head) :: map(f: f, list: tail)
@@ -290,7 +290,7 @@ test("a named signature parameter must match the value", () => {
     if (points.tag === "Array") assert.equal(prune(points.elementType).tag, "Vector");
 
     const mismatch = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def same: a: T => b: T => number = x => y => 1.0
     `;
     assert.throws(() => inferSourceEnvironment(mismatch), /'same' does not match its signature/);
@@ -298,7 +298,7 @@ test("a named signature parameter must match the value", () => {
 
 test("a parameters group is a record and a later field can read an earlier one", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         parameters {
             plate: {
                 size: 100.0,
@@ -320,7 +320,7 @@ test("a parameters group is a record and a later field can read an earlier one",
 
 test("a missing parameter field is an error", () => {
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         parameters { plate: { size: 100.0 } }
         def missing = $plate.depth
     `), /'depth' is not a field of \$plate\. \$plate has size\./);
@@ -328,14 +328,14 @@ test("a missing parameter field is an error", () => {
 
 test("a parameter name is bound once in its group", () => {
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         parameters { plate: { size: 1.0, size: 2.0 } }
     `), /'size' is already a parameter in this group/);
 });
 
 test("a parameter field and a component anchor are different reads", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         parameters { plate: { size: 100.0 } }
         def Mark = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: $plate.size, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
@@ -352,12 +352,12 @@ test("a parameter field and a component anchor are different reads", () => {
     assert.equal(sameName.tag, "Function");
     if (sameName.tag === "Function") assert.equal(prune(sameName.returnType).tag, "Float");
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         parameters { plate: { size: 100.0 } }
         def bare = plate
     `), /Unbound identifier/);
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         parameters { plate: { size: 100.0 } }
         def missing = $holes
     `), /'\$holes' is not a parameter/);
@@ -368,7 +368,7 @@ test("a parameter field and a component anchor are different reads", () => {
 // ----------------------------------------------------------------------------
 test("Infers Types Across Fully Polymorphic Destructuring Blocks", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         // Generic utility returning the first element of an arbitrary array
         def Origin = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
@@ -401,7 +401,7 @@ test("Infers Types Across Fully Polymorphic Destructuring Blocks", () => {
 test("Engine Correctly Rejects Static Primitive Unification Mismatches", () => {
     // Failure Case: Attempting to run uniform math arithmetic over incompatible types
     const invalidUnificationSource = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def invalid_math = 10.0 + "unsupported_string"
     `;
 
@@ -412,7 +412,7 @@ test("Engine Correctly Rejects Static Primitive Unification Mismatches", () => {
 
 test("A script must export a component", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def size = 1.0
     `;
     const engine = new TypeInferenceEngine();
@@ -423,7 +423,7 @@ test("A script must export a component", () => {
 
 test("Export and geometric operators require components", () => {
     const rawSolid = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Origin = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => { at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0) }
@@ -436,7 +436,7 @@ test("Export and geometric operators require components", () => {
     }, /Type Inference Error: Structural Unification Mismatch/);
 
     const rawDifference = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Origin = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => {
@@ -469,7 +469,7 @@ test("Geometric operators exist only inside their join", () => {
         )
     `;
     const outside = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def cut = Block - Block
     `;
@@ -478,7 +478,7 @@ test("Geometric operators exist only inside their join", () => {
     }, /Type Inference Error: Operator '-' is only defined for SeatedSolid3D/);
 
     const combined = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         ${mate}
         def cut = join(frame: Block, placed: Block, using: frame => placed => mate, combine: frame => placed => (frame + placed) - frame)
@@ -487,7 +487,7 @@ test("Geometric operators exist only inside their join", () => {
     assertPartialJoin(prune(env.lookup("cut").type));
 
     const seatedMember = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         ${mate}
         def cut = join(frame: Block, placed: Block, using: frame => placed => mate, combine: frame => placed => join(
@@ -502,7 +502,7 @@ test("Geometric operators exist only inside their join", () => {
     }, /Type Inference Error: join frame must be a component/);
 
     const crossed = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         ${mate}
         def cut = join(frame: Block, placed: Block, using: frame => placed => mate, combine: frame => placed => join(
@@ -517,7 +517,7 @@ test("Geometric operators exist only inside their join", () => {
     }, /Type Inference Error: Operator '-' is only defined for SeatedSolid3D/);
 
     const numberResult = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         ${mate}
         def cut = join(frame: Block, placed: Block, using: frame => placed => mate, combine: frame => placed => 1.0 - 0.5)
@@ -527,7 +527,7 @@ test("Geometric operators exist only inside their join", () => {
     }, /Type Inference Error: combine is frame => placed => SeatedSolid3D/);
 
     const passed = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         ${mate}
         def place = host => placed => combine => join(
@@ -544,7 +544,7 @@ test("Geometric operators exist only inside their join", () => {
     assertPartialJoin(prune(passedEnv.lookup("cut").type));
 
     const namedOutside = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         ${mate}
         def place = host => placed => combine => join(
@@ -563,7 +563,7 @@ test("Geometric operators exist only inside their join", () => {
 
 test("A join seats parts by the anchors they expose", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Outer = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => {
@@ -596,7 +596,7 @@ test("A join seats parts by the anchors they expose", () => {
 
 test("a function may join the component it receives", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Block = Component(
             solid: coords => Solid3D(faces: [
                 Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))
@@ -624,7 +624,7 @@ test("a function may join the component it receives", () => {
 
 test("a function may read the anchors of the component it receives", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Mark = Component(
             solid: coords => Solid3D(faces: [
                 Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))
@@ -641,7 +641,7 @@ test("a function may read the anchors of the component it receives", () => {
     assert.equal(prune(env.lookup("point").type).tag, "Vector");
     assert.throws(() => {
         inferSourceEnvironment(`
-            setup { units: "mm", coordinate_system: "Z-up" }
+            setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
             def Mark = Component(
                 solid: coords => Solid3D(faces: [
                     Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))
@@ -663,7 +663,7 @@ test("Member access only reads an exposed anchor", () => {
     `;
     assert.throws(() => {
         inferSourceEnvironment(`
-            setup { units: "mm", coordinate_system: "Z-up" }
+            setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
             ${brick}
             def missing = Brick.lip
         `);
@@ -671,7 +671,7 @@ test("Member access only reads an exposed anchor", () => {
 
     assert.throws(() => {
         inferSourceEnvironment(`
-            setup { units: "mm", coordinate_system: "Z-up" }
+            setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
             ${brick}
             def mate = align(
                 planar: meet(frame: Brick.seat, placed: Brick.seat),
@@ -684,7 +684,7 @@ test("Member access only reads an exposed anchor", () => {
 
     assert.throws(() => {
         inferSourceEnvironment(`
-            setup { units: "mm", coordinate_system: "Z-up" }
+            setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
             def Brick = Component(
                 solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
                 expose: coords => {
@@ -697,7 +697,7 @@ test("Member access only reads an exposed anchor", () => {
 
     assert.throws(() => {
         inferSourceEnvironment(`
-            setup { units: "mm", coordinate_system: "Z-up" }
+            setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
             def Brick = Component(
                 solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
                 expose: coords => { shell: 1.0 }
@@ -708,7 +708,7 @@ test("Member access only reads an exposed anchor", () => {
 
 test("let names a value for the following expression", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Origin = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => { at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0) }
@@ -722,14 +722,14 @@ test("let names a value for the following expression", () => {
     assert.equal(prune(env.lookup("width").type).tag, "Float");
     assert.equal(prune(env.lookup("disk").type).tag, "Surface2D");
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def loop = let f = x => f(x: x) in f(x: 1.0)
     `), /Unbound identifier/);
 });
 
 test("an anchor error names the component, the read, and the source location", () => {
     const source = [
-        'setup { units: "mm", coordinate_system: "Z-up" }',
+        'setup { name: "Model", units: "mm", coordinate_system: "Z-up" }',
         "def Box = Component(",
         "    solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),",
         "    expose: coords => { up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0), corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0) }",
@@ -745,7 +745,7 @@ test("an anchor error names the component, the read, and the source location", (
     );
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Box = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => { up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0), corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0) }
@@ -764,7 +764,7 @@ test("an anchor error names the component, the read, and the source location", (
 
 test("a component receives one coordinate system named coords", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Mark = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => { up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0) }
@@ -777,28 +777,28 @@ test("a component receives one coordinate system named coords", () => {
 
 test("a vector outside a component cannot see coords", () => {
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def up = Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0)
     `), /Unbound identifier 'coords'/);
 });
 
 test("solid and expose are coords functions", () => {
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Mark = Component(
             solid: Solid3D(faces: []),
             expose: coords => {}
         )
     `), /Component solid is coords => solid/);
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Mark = Component(
             solid: coords => Solid3D(faces: []),
             expose: {}
         )
     `), /Component expose is coords => \{ anchors \}/);
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Mark = Component(
             solid: system => Solid3D(faces: []),
             expose: coords => {}
@@ -808,7 +808,7 @@ test("solid and expose are coords functions", () => {
 
 test("vector coords is a coordinate system", () => {
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Mark = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => Vector(coords: 1.0, x: 0.0, y: 0.0, z: 0.0))]),
             expose: coords => {}
@@ -816,7 +816,7 @@ test("vector coords is a coordinate system", () => {
     `), /Vector coords is a coordinate system/);
 
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def offset: coordinate_system => vector = coords => Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0)
         def Mark = Component(
             solid: coords => Solid3D(faces: [Surface2D(max_u: 1.0, min_v: u => 0.0, max_v: u => 1.0, formula: u => v => offset(coords: coords))]),
@@ -836,7 +836,7 @@ test("join is a function of the coordinate system, and a component does not expo
         )
     `;
     const joined = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def Pair = Component(
             solid: join(frame: Block, placed: Block, using: frame => placed => align(
@@ -852,13 +852,13 @@ test("join is a function of the coordinate system, and a component does not expo
     assert.equal(pair.tag, "Component");
     if (pair.tag === "Component") assert.deepEqual([...pair.anchors], ["up"]);
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def system = Block.coords
     `), /A component does not expose its coordinate system/);
 
     const applied = prune(inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def cut = coords => join(frame: Block, placed: Block, using: frame => placed => align(
             planar: meet(frame: frame.up, placed: placed.up),
@@ -870,7 +870,7 @@ test("join is a function of the coordinate system, and a component does not expo
     if (applied.tag === "Function") assert.equal(prune(applied.returnType).tag, "Solid3D");
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def Wrapped = Component(
             solid: coords => join(frame: Block, placed: Block, using: frame => placed => align(
@@ -883,7 +883,7 @@ test("join is a function of the coordinate system, and a component does not expo
     `), /join takes the coordinate system, so solid is join\(\.\.\.\)/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def Named = Component(
             solid: coords => Solid3D(faces: []),
@@ -892,7 +892,7 @@ test("join is a function of the coordinate system, and a component does not expo
     `), /Anchor 'coords' is the component's coordinate system/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def cut = join(frame: Block, placed: Block, using: frame => placed => align(
             planar: meet(frame: frame.up, placed: placed.up),
@@ -902,7 +902,7 @@ test("join is a function of the coordinate system, and a component does not expo
     `), /join coords is a coordinate system/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def cut = join(frame: Block, placed: Block, using: frame => placed => align(
             planar: meet(frame: frame.up, placed: placed.up),
@@ -912,7 +912,7 @@ test("join is a function of the coordinate system, and a component does not expo
     `), /A component does not expose its coordinate system/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def read = part => part.coords
         def system = read(part: Block)
@@ -930,7 +930,7 @@ test("vector methods keep one coordinate system and operators stay numeric", () 
         )
     `;
     const env = inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def moved = Block.at.offset(x: 10.0, y: 0.0, z: 0.0 - 1.0)
         def sum = Block.at.add(vector: Block.up)
@@ -948,37 +948,37 @@ test("vector methods keep one coordinate system and operators stay numeric", () 
     }
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def bad = Block.at + Block.up
     `), /Operator '\+' does not combine vectors\. Use add\(vector:\)/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def bad = Block.at - Block.up
     `), /Operator '-' does not combine vectors\. Use subtract\(vector:\)/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def bad = Block.offset(x: 1.0, y: 0.0, z: 0.0)
     `), /'offset' is a method on a vector/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def bad = Block.at.scale(x: 1.0, y: 0.0, z: 0.0)
     `), /'scale' is not a vector method/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def bad = Block.at.offset(y: 1.0, x: 0.0, z: 0.0)
     `), /Expected named parameter identifier 'x'/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         ${block}
         def bad = Block.at.add(right: Block.up)
     `), /Expected named parameter identifier 'vector'/);
@@ -986,7 +986,7 @@ test("vector methods keep one coordinate system and operators stay numeric", () 
 
 test("integers is a list of numbers from a start and a count", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def indexes = integers(start: 0.0, count: 5.0)
         def waiting = integers(start: 0.0)
     `;
@@ -1001,18 +1001,18 @@ test("integers is a list of numbers from a start and a count", () => {
         assert.equal(prune(waiting.returnType).tag, "Array");
     }
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def bad = integers(from: 0.0, count: 1.0)
     `), /Expected named parameter identifier 'start'/);
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def bad = integers(start: true, count: 1.0)
     `), /Structural Unification Mismatch/);
 });
 
 test("a tuple keeps each value's type and let takes it apart", () => {
     const env = inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def pair: (number, boolean) = (1.0, true)
         def nested = (1.0, (2.0, 3.0))
         def sum = let (x, (y, z)) = nested in x + y + z
@@ -1033,7 +1033,7 @@ test("a tuple keeps each value's type and let takes it apart", () => {
         assert.equal(prune(first.returnType).tag, "Variable");
     }
     inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def first = pair => let (x, y) = pair in x
         def n = first(pair: (1.0, true))
         def Mark = Component(
@@ -1044,28 +1044,58 @@ test("a tuple keeps each value's type and let takes it apart", () => {
     `);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def same: (T, T) => T = pair => let (x, y) = pair in x
         def bad = same(pair: (1.0, true))
     `), /does not match its signature|Structural Unification Mismatch|A tuple of/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def bad = let (x, y) = 1.0 in x
     `), /let takes a tuple apart with \(x, y\)/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def bad = let (x, y) = (1.0, 2.0, 3.0) in x
     `), /This tuple has 3 values\. The pattern has 2\./);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def bad = let (x, x) = (1.0, 2.0) in x
     `), /'x' is already bound in this tuple/);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def wide: (number, number, number) = (1.0, 2.0)
     `), /A tuple of 2 values does not match a tuple of 3 values/);
+});
+
+test("Box, Cylinder, Sphere, and fold are in the standard library", () => {
+    inferSourceEnvironment(`
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def brick = Box(width: 10.0, depth: 20.0, height: 30.0)
+        def top = brick.top
+        def rod = Cylinder(radius: 4.0, height: 12.0)
+        def forward = rod.forward
+        def ball = Sphere(radius: 8.0)
+        def pole = ball.top
+        def total = fold(f: item => accumulator => accumulator + item, initial: 0.0, list: [1.0, 2.0])
+    `);
+
+    assert.throws(() => inferSourceEnvironment(`
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def ball = Sphere(radius: 8.0)
+        def missing = ball.corner
+    `), /'corner' is not an anchor/);
+
+    assert.throws(() => inferSourceEnvironment(`
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def brick = Box(width: 10.0, depth: 20.0, height: 30.0)
+        def missing = brick.forward
+    `), /'forward' is not an anchor/);
+
+    assert.throws(() => inferSourceEnvironment(`
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def total = fold(f: head => accumulator => head, initial: 0.0, list: [1.0])
+    `), /Expected named parameter identifier 'item'/);
 });

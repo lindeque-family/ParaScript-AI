@@ -1,4 +1,5 @@
 setup {
+    name: "Hollow box",
     units: "mm",
     coordinate_system: "Z-up"
 }
@@ -9,54 +10,6 @@ parameters {
     height: 30.0,
     wall_thickness: 3.0
 }
-
-def Box = width => depth => height =>
-    Component(
-        solid: coords =>
-            let top = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
-            let bottom = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
-            let front = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
-            let back = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
-            let left = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: 0, y: u, z: v)) in
-            let right = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
-            Solid3D(faces: [
-                top,
-                bottom,
-                front,
-                back,
-                left,
-                right
-            ]),
-        expose: coords => {
-            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
-        }
-    )
 
 def HollowBox = 
     let box = Box(

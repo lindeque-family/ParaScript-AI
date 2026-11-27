@@ -76,6 +76,8 @@ export interface SetupBlock extends BaseNode {
     readonly type: "SetupBlock";
     readonly units: "mm" | "inch";
     readonly coordinateSystem: "Z-up" | "Y-up" | "X-up";
+    /** Model name. Required. The STL download uses it. */
+    readonly name: string;
 }
 
 export interface ParamDeclaration extends BaseNode {

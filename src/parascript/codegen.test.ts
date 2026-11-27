@@ -29,7 +29,7 @@ function inferSourceEnvironment(source: string): TypeEnvironment {
 test("Code Generator Compiles AST into Live Executable JavaScript", () => {
     // Enforces the strict named parameter keys required by the parser grammar
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def initial_radius = 25.0
         def custom_surface = Surface2D(
             max_u: 6.28,
@@ -63,7 +63,7 @@ test("Code Generator Compiles AST into Live Executable JavaScript", () => {
 
 test(">> runs the left function first and keeps its parameter name", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def shift = d => x => x + d
         def scale = k => x => k * x
         def adjust = shift(d: 3.0) >> scale(k: 2.0)
@@ -85,7 +85,7 @@ test(">> runs the left function first and keeps its parameter name", () => {
     assert.equal(mark.geometry.faces[0].maxU, 14);
 
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def shift = d => x => x + d
         def bad = shift(d: 1.0) >> 2.0
         export(Mark)
@@ -94,7 +94,7 @@ test(">> runs the left function first and keeps its parameter name", () => {
 
 test("|> fills the function's next argument", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def sum = list => match list {
             [] => 0.0,
             head :: tail => head + sum(list: tail)
@@ -121,7 +121,7 @@ test("|> fills the function's next argument", () => {
     const mark = new Function(`${generatedJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
     assert.equal(mark.geometry.faces[0].maxU, 26);
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def bad = 1.0 |> 2.0
         export(Mark)
     `), /\|> pipes a value into a function/);
@@ -129,7 +129,7 @@ test("|> fills the function's next argument", () => {
 
 test("map and filter are standard list functions", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def sum = list => match list {
             [] => 0.0,
             head :: tail => head + sum(list: tail)
@@ -163,12 +163,12 @@ test("map and filter are standard list functions", () => {
         export(Mark)
     `;
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def bad = map(f: value => value, list: [1.0])
         ${rejected}
     `), /Keyword Argument Mismatch/);
     assert.throws(() => inferSourceEnvironment(`
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def bad = filter(predicate: item => item, list: [1.0])
         ${rejected}
     `), /Structural Unification Mismatch/);
@@ -176,7 +176,7 @@ test("map and filter are standard list functions", () => {
 
 test("a call applies each argument of a curried function", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def box = width => depth => height => width + depth + height
         def sum = box(width: 10.0, depth: 4.0, height: 7.0)
     `;
@@ -190,7 +190,7 @@ test("a call applies each argument of a curried function", () => {
 
 test("a parameter field is the value the script reads", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         parameters {
             plate: {
                 size: 100.0,
@@ -221,7 +221,7 @@ test("a parameter field is the value the script reads", () => {
 
 test("Code Generator Handles Overloaded Geometric Composition and Mating Operators", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Bracket = Component(
             solid: coords => Solid3D(faces: Array()),
             expose: coords => {}
@@ -262,7 +262,7 @@ test("vector add and subtract require one coordinate system", () => {
     assert.throws(() => ops.subtractVectors(left, other), /Vector subtract needs one coordinate system/);
 
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Mark = Component(
             solid: coords => Solid3D(faces: []),
             expose: coords => {
@@ -284,7 +284,7 @@ test("vector add and subtract require one coordinate system", () => {
 
 test("let names a value and a component can be published again", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def Cap = radius =>
             let span = radius * 2.0 in
             Component(
@@ -311,7 +311,7 @@ test("let names a value and a component can be published again", () => {
 test("Type Inference Engine Catches and Rejects Mathematical Keyword Mismatches", () => {
     // Failure Case: 'sin' expects 'rad:', but the script incorrectly supplies 'v:'
     const invalidMathKeywordSource = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def sphere_radius = 25.0
         def Bad = Component(
             solid: coords => Solid3D(faces: [
@@ -337,7 +337,7 @@ test("Type Inference Engine Catches and Rejects Mathematical Keyword Mismatches"
 
 test("integers lists whole numbers from a start and a count", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def samples = (
             integers(start: 0.0, count: 5.0),
             integers(start: 0.0 - 2.0, count: 3.0),
@@ -355,7 +355,7 @@ test("integers lists whole numbers from a start and a count", () => {
     ]);
 
     const fractional = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def values = integers(start: 1.5, count: 2.0)
     `;
     const fractionalJs = new WebCodeGenerator().generate(new Parser(fractional).parse());
@@ -364,7 +364,7 @@ test("integers lists whole numbers from a start and a count", () => {
     }, /integers start is a whole number/);
 
     const negative = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def values = integers(start: 0.0, count: 0.0 - 1.0)
     `;
     const negativeJs = new WebCodeGenerator().generate(new Parser(negative).parse());
@@ -373,9 +373,51 @@ test("integers lists whole numbers from a start and a count", () => {
     }, /integers count is a whole number, zero or more/);
 });
 
+test("fold visits the last item first and a definition replaces it", () => {
+    const source = `
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def samples = (
+            fold(f: item => accumulator => accumulator * 10.0 + item, initial: 0.0, list: [1.0, 2.0, 3.0]),
+            fold(f: item => accumulator => accumulator, initial: 4.0, list: []),
+            [1.0, 2.0, 3.0] |> fold(f: item => accumulator => accumulator * 10.0 + item, initial: 0.0)
+        )
+    `;
+    const generatedJs = new WebCodeGenerator().generate(new Parser(source).parse());
+    const samples = new Function(`${generatedJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
+    assert.deepEqual(samples.elements, [321, 4, 321]);
+
+    const shadowed = `
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def Box = width => depth => height => width + depth + height
+        def fold = f => initial => list => initial
+        def value = (Box(width: 2.0, depth: 3.0, height: 4.0), fold(f: item => accumulator => item, initial: 9.0, list: [1.0]))
+    `;
+    const shadowedJs = new WebCodeGenerator().generate(new Parser(shadowed).parse());
+    const value = new Function(`${shadowedJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
+    assert.deepEqual(value.elements, [9, 9]);
+
+    const badSize = `
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def value = Cylinder(radius: 0.0, height: 1.0)
+    `;
+    const badSizeJs = new WebCodeGenerator().generate(new Parser(badSize).parse());
+    assert.throws(() => {
+        new Function(`${badSizeJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
+    }, /Cylinder radius is a number greater than zero/);
+
+    const badSphere = `
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
+        def value = Sphere(radius: 0.0)
+    `;
+    const badSphereJs = new WebCodeGenerator().generate(new Parser(badSphere).parse());
+    assert.throws(() => {
+        new Function(`${badSphereJs.replace("export function", "function")}\nreturn executeModelPipeline();`)();
+    }, /Sphere radius is a number greater than zero/);
+});
+
 test("a tuple evaluates to its elements", () => {
     const source = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def nested = (1.0, (2.0, 3.0))
         def sum = let (x, (y, z)) = nested in x + y + z
     `;
@@ -384,7 +426,7 @@ test("a tuple evaluates to its elements", () => {
     assert.equal(sum, 6);
 
     const broken = `
-        setup { units: "mm", coordinate_system: "Z-up" }
+        setup { name: "Model", units: "mm", coordinate_system: "Z-up" }
         def sum = let (x, y) = 1.0 in x
     `;
     const brokenJs = new WebCodeGenerator().generate(new Parser(broken).parse());

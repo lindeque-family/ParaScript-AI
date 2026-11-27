@@ -293,6 +293,7 @@ export class Parser {
 
         let units: "mm" | "inch" = "mm";
         let coordinateSystem: "Z-up" | "Y-up" | "X-up" = "Z-up";
+        let name: string | undefined;
 
         while (this.peek().type !== "RBRACE" && this.peek().type !== "EOF") {
             const key = this.consume("IDENTIFIER", "Expected property layout identifier key in setup.").value;
@@ -304,12 +305,22 @@ export class Parser {
             } else if (key === "coordinate_system") {
                 const cVal = this.consume("STRING", "Coordinate system orientation must be a string.").value;
                 if (cVal === "Z-up" || cVal === "Y-up" || cVal === "X-up") coordinateSystem = cVal;
+            } else if (key === "name") {
+                const token = this.consume("STRING", "Setup name is a string.");
+                const value = token.value.trim();
+                if (value.length === 0) {
+                    throw new Error(`Parser Error: Setup name is a non-empty string. (Found '' at line ${token.line}, col ${token.char})`);
+                }
+                name = value;
             }
             if (this.peek().type === "COMMA") this.advance();
         }
 
-        this.consume("RBRACE", "Expected '}' to seal configuration limits.");
-        return { type: "SetupBlock", units, coordinateSystem };
+        const close = this.consume("RBRACE", "Expected '}' to seal configuration limits.");
+        if (name === undefined) {
+            throw new Error(`Parser Error: Setup requires a name. (Found '}' at line ${close.line}, col ${close.char})`);
+        }
+        return { type: "SetupBlock", units, coordinateSystem, name };
     }
 
     private parseStructuralStatement(): ASTNode {

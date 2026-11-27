@@ -1,4 +1,5 @@
 setup {
+    name: "Desk set",
     units: "mm",
     coordinate_system: "Z-up"
 }
@@ -44,90 +45,6 @@ parameters {
 }
 
 def pi = 3.14159265359
-
-def Box = width => depth => height =>
-    Component(
-        solid: coords =>
-            let top = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
-            let bottom = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
-            let front = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
-            let back = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
-            let left = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: 0.0, y: u, z: v)) in
-            let right = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
-            Solid3D(faces: [
-                    bottom,
-                    top,
-                    back,
-                    front,
-                    left,
-                    right
-                ]),
-        expose: coords => {
-            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
-            bottom: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: 0.0),
-            top: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: height)
-        }
-    )
-
-def Cylinder = radius => height =>
-    Component(
-        solid: coords =>
-            let Disk = z => Surface2D(
-                max_u: 2.0 * pi,
-                min_v: u => 0.0,
-                max_v: u => radius,
-                formula: u => v => Vector(coords: coords,
-                    x: v * cos(rad: u),
-                    y: v * sin(rad: u),
-                    z: z)) in
-            let wall = Surface2D(
-                max_u: 2.0 * pi,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords,
-                    x: radius * cos(rad: u),
-                    y: radius * sin(rad: u),
-                    z: v)) in
-            let bottom = Disk(z: 0.0) in
-            let top = Disk(z: height) in
-            Solid3D(faces: [
-                    wall,
-                    bottom,
-                    top
-                ]),
-        expose: coords => {
-            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-            bottom: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
-            top: Vector(coords: coords, x: 0.0, y: 0.0, z: height)
-        }
-    )
 
 def Clip =
     let block = Box(

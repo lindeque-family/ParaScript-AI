@@ -1,4 +1,5 @@
 setup {
+    name: "Car",
     units: "mm",
     coordinate_system: "Z-up"
 }
@@ -26,122 +27,51 @@ parameters {
     }
 }
 
-def pi = 3.14159265359
-
-def Box = width => depth => height =>
-    Component(
-        solid: coords =>
-            let top = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: height)) in
-            let bottom = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => depth,
-                formula: u => v => Vector(coords: coords, x: u, y: v, z: 0.0)) in
-            let front = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: depth, z: v)) in
-            let back = Surface2D(
-                max_u: width,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: u, y: 0.0, z: v)) in
-            let left = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: 0.0, y: u, z: v)) in
-            let right = Surface2D(
-                max_u: depth,
-                min_v: u => 0.0,
-                max_v: u => height,
-                formula: u => v => Vector(coords: coords, x: width, y: u, z: v)) in
-            Solid3D(faces: [
-                    top,
-                    bottom,
-                    front,
-                    back,
-                    left,
-                    right
-                ]),
-        expose: coords => {
-            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-            corner: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0),
-            bottom: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: 0.0),
-            top: Vector(coords: coords, x: width / 2.0, y: depth / 2.0, z: height)
-        }
-    )
-
-def Wheel = radius => width =>
-    Component(
-        solid: coords =>
-            let half = width / 2.0 in
-            let wall = Surface2D(
-                max_u: 2.0 * pi,
-                min_v: u => 0.0,
-                max_v: u => width,
-                formula: u => v => Vector(coords: coords, 
-                    x: 0.0 - half + v,
-                    y: radius * cos(rad: u),
-                    z: radius * sin(rad: u))) in
-            let left = Surface2D(
-                max_u: 2.0 * pi,
-                min_v: u => 0.0,
-                max_v: u => radius,
-                formula: u => v => Vector(coords: coords, 
-                    x: 0.0 - half,
-                    y: v * cos(rad: u),
-                    z: v * sin(rad: u))) in
-            let right = Surface2D(
-                max_u: 2.0 * pi,
-                min_v: u => 0.0,
-                max_v: u => radius,
-                formula: u => v => Vector(coords: coords, 
-                    x: half,
-                    y: v * cos(rad: u),
-                    z: v * sin(rad: u))) in
-            Solid3D(faces: [
-                    wall,
-                    left,
-                    right
-                ]),
+def Axle = host => y =>
+    let track = $body.width - $wheel.width in
+    let with_left = Component(
+        solid: join(
+            frame: host,
+            placed: Cylinder(radius: $wheel.radius, height: $wheel.width),
+            using: frame => placed => align(
+                planar: meet(
+                    frame: frame.right,
+                    placed: placed.up),
+                translation: meet(
+                    frame: frame.at.offset(
+                        x: $wheel.width / 2.0,
+                        y: y,
+                        z: $wheel.radius - $wheel.ride),
+                    placed: placed.center),
+                rotation: meet(
+                    frame: frame.up,
+                    placed: placed.forward)
+            ),
+            combine: frame => placed => frame + placed
+        ),
         expose: coords => {
             up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
             right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
             at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
         }
-    )
-
-def Axle =
-    let track = $body.width - $wheel.width in
-    let left = Wheel(
-        radius: $wheel.radius,
-        width: $wheel.width) in
-    let right = Wheel(
-        radius: $wheel.radius,
-        width: $wheel.width) in
+    ) in
     Component(
         solid: join(
-            frame: left,
-            placed: right,
+            frame: with_left,
+            placed: Cylinder(radius: $wheel.radius, height: $wheel.width),
             using: frame => placed => align(
                 planar: meet(
-                    frame: frame.up,
+                    frame: frame.right,
                     placed: placed.up),
                 translation: meet(
-                    frame: frame.at.offset(x: track,
-                        y: 0.0,
-                        z: 0.0),
-                    placed: placed.at),
+                    frame: frame.at.offset(
+                        x: $wheel.width / 2.0 + track,
+                        y: y,
+                        z: $wheel.radius - $wheel.ride),
+                    placed: placed.center),
                 rotation: meet(
-                    frame: frame.right,
-                    placed: placed.right)
+                    frame: frame.up,
+                    placed: placed.forward)
             ),
             combine: frame => placed => frame + placed
         ),
@@ -186,53 +116,11 @@ def Car =
             at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
         }
     ) in
-    let with_front = Component(
-        solid: join(
-            frame: hull,
-            placed: Axle,
-            using: frame => placed => align(
-                planar: meet(
-                    frame: frame.up,
-                    placed: placed.up),
-                translation: meet(
-                    frame: frame.at.offset(
-                        x: $wheel.width / 2.0,
-                        y: $body.depth - $axle.nose,
-                        z: $wheel.radius - $wheel.ride),
-                    placed: placed.at),
-                rotation: meet(
-                    frame: frame.right,
-                    placed: placed.right)
-            ),
-            combine: frame => placed => frame + placed
-        ),
-        expose: coords => {
-            up: Vector(coords: coords, x: 0.0, y: 0.0, z: 1.0),
-            right: Vector(coords: coords, x: 1.0, y: 0.0, z: 0.0),
-            at: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
-        }
-    ) in
-    Component(
-        solid: join(
-            frame: with_front,
-            placed: Axle,
-            using: frame => placed => align(
-                planar: meet(
-                    frame: frame.up,
-                    placed: placed.up),
-                translation: meet(
-                    frame: frame.at.offset(
-                        x: $wheel.width / 2.0,
-                        y: $body.depth - $axle.nose - $axle.wheelbase,
-                        z: $wheel.radius - $wheel.ride),
-                    placed: placed.at),
-                rotation: meet(
-                    frame: frame.right,
-                    placed: placed.right)
-            ),
-            combine: frame => placed => frame + placed
-        ),
-        expose: coords => {}
-    )
+    let with_front = Axle(
+        host: hull,
+        y: $body.depth - $axle.nose) in
+    Axle(
+        host: with_front,
+        y: $body.depth - $axle.nose - $axle.wheelbase)
 
 export(Car)

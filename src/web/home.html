@@ -51,33 +51,12 @@
             <a class="secondary" href="/language">See how it works</a>
         </p>
         <figure class="sample">
-            <figcaption>A sphere is one face. Two numbers in, one point out. <a href="/workspace?example=sphere">Open this script</a></figcaption>
+            <figcaption>Sphere(radius:) is centered on the origin. The radius is chosen at the call. <a href="/workspace?example=sphere">Open this script</a></figcaption>
             <pre><code><span class="kw">setup</span> {
+    <span class="name">name</span>: <span class="str">"Sphere"</span>,
     <span class="name">units</span>: <span class="str">"mm"</span>,
     <span class="name">coordinate_system</span>: <span class="str">"Z-up"</span>
 }
-
-<span class="kw">def</span> <span class="fn">pi</span> = <span class="num">3.14159265359</span>
-
-<span class="kw">def</span> <span class="fn">Sphere</span> = <span class="name">radius</span> =&gt; <span class="fn">Component</span>(
-    <span class="name">solid</span>: <span class="name">coords</span> =&gt; <span class="fn">Solid3D</span>(<span class="name">faces</span>: [
-        <span class="fn">Surface2D</span>(
-            <span class="name">max_u</span>: <span class="num">2.0</span> * <span class="fn">pi</span>,
-            <span class="name">min_v</span>: <span class="name">u</span> =&gt; <span class="num">0.0</span>,
-            <span class="name">max_v</span>: <span class="name">u</span> =&gt; <span class="fn">pi</span>,
-            <span class="name">formula</span>: <span class="name">u</span> =&gt; <span class="name">v</span> =&gt; <span class="fn">Vector</span>(<span class="name">coords</span>: <span class="name">coords</span>,
-                <span class="name">x</span>: <span class="name">radius</span> * <span class="fn">cos</span>(<span class="name">rad</span>: <span class="name">u</span>) * <span class="fn">sin</span>(<span class="name">rad</span>: <span class="name">v</span>),
-                <span class="name">y</span>: <span class="name">radius</span> * <span class="fn">sin</span>(<span class="name">rad</span>: <span class="name">u</span>) * <span class="fn">sin</span>(<span class="name">rad</span>: <span class="name">v</span>),
-                <span class="name">z</span>: <span class="name">radius</span> * <span class="fn">cos</span>(<span class="name">rad</span>: <span class="name">v</span>)
-            )
-        )
-    ]),
-    <span class="name">expose</span>: <span class="name">coords</span> =&gt; {
-        <span class="name">up</span>: <span class="fn">Vector</span>(<span class="name">coords</span>: <span class="name">coords</span>, <span class="name">x</span>: <span class="num">0.0</span>, <span class="name">y</span>: <span class="num">0.0</span>, <span class="name">z</span>: <span class="num">1.0</span>),
-        <span class="name">right</span>: <span class="fn">Vector</span>(<span class="name">coords</span>: <span class="name">coords</span>, <span class="name">x</span>: <span class="num">1.0</span>, <span class="name">y</span>: <span class="num">0.0</span>, <span class="name">z</span>: <span class="num">0.0</span>),
-        <span class="name">origin</span>: <span class="fn">Vector</span>(<span class="name">coords</span>: <span class="name">coords</span>, <span class="name">x</span>: <span class="num">0.0</span>, <span class="name">y</span>: <span class="num">0.0</span>, <span class="name">z</span>: <span class="num">0.0</span>)
-    }
-)
 
 <span class="kw">export</span>(<span class="fn">Sphere</span>(<span class="name">radius</span>: <span class="num">25.0</span>))</code></pre>
         </figure>

@@ -1,0 +1,100 @@
+setup {
+    name: "Letter M",
+    units: "mm",
+    coordinate_system: "Z-up"
+}
+
+parameters {
+    script: {
+        stroke_radius: 1.8,
+        extrude_height: 4.0,
+        base_thickness: 2.0,
+        total_width: 56.0,
+        total_depth: 58.0
+    }
+}
+
+def pi = 3.14159265359
+
+def place_beads = host => points => bead => fold(
+    f: item => accumulator => Component(
+        solid: join(
+            frame: accumulator,
+            placed: bead,
+            using: frame => placed => align(
+                planar: meet(frame: accumulator.up, placed: placed.up),
+                translation: meet(frame: accumulator.corner.add(vector: item), placed: placed.bottom),
+                rotation: meet(frame: accumulator.right, placed: placed.right)
+            ),
+            combine: frame => placed => frame + placed
+        ),
+        expose: coords => { up: accumulator.up, right: accumulator.right, corner: accumulator.corner }
+    ),
+    initial: host,
+    list: points
+)
+
+def sample_segment = coords => x0 => y0 => x1 => y1 => steps =>
+    integers(start: 0.0, count: steps + 1.0)
+    |> map(f: item =>
+        let t = item / steps in
+        Vector(
+            coords: coords,
+            x: x0 + ((x1 - x0) * t),
+            y: y0 + ((y1 - y0) * t),
+            z: $script.base_thickness - 0.4
+        )
+    )
+
+def sample_arc = coords => cx => cy => rx => ry => start_deg => end_deg => steps =>
+    integers(start: 0.0, count: steps + 1.0)
+    |> map(f: item =>
+        let t = item / steps in
+        let ang = (start_deg + ((end_deg - start_deg) * t)) * (pi / 180.0) in
+        Vector(
+            coords: coords,
+            x: cx + (rx * cos(rad: ang)),
+            y: cy + (ry * sin(rad: ang)),
+            z: $script.base_thickness - 0.4
+        )
+    )
+
+def append_lists = a => b => fold(f: item => accumulator => item :: accumulator, initial: b, list: a)
+
+def concat_all = lists => fold(f: item => accumulator => append_lists(a: item, b: accumulator), initial: [], list: lists)
+
+def letter_m_points = coords => concat_all(lists: [
+    sample_arc(coords: coords, cx: 14.0, cy: 14.0, rx: 4.5, ry: 4.0, start_deg: 230.0, end_deg: 30.0, steps: 10.0),
+    sample_segment(coords: coords, x0: 17.9, y0: 16.0, x1: 23.0, y1: 43.0, steps: 14.0),
+    sample_arc(coords: coords, cx: 24.2, cy: 43.0, rx: 1.2, ry: 1.5, start_deg: 160.0, end_deg: 10.0, steps: 5.0),
+    sample_segment(coords: coords, x0: 25.4, y0: 42.8, x1: 29.0, y1: 23.0, steps: 11.0),
+    sample_arc(coords: coords, cx: 30.2, cy: 23.0, rx: 1.2, ry: 1.5, start_deg: 190.0, end_deg: 350.0, steps: 5.0),
+    sample_segment(coords: coords, x0: 31.4, y0: 23.0, x1: 35.5, y1: 43.0, steps: 11.0),
+    sample_arc(coords: coords, cx: 36.7, cy: 43.0, rx: 1.2, ry: 1.5, start_deg: 170.0, end_deg: 10.0, steps: 5.0),
+    sample_segment(coords: coords, x0: 37.9, y0: 42.8, x1: 41.0, y1: 15.0, steps: 14.0),
+    sample_arc(coords: coords, cx: 45.5, cy: 15.0, rx: 4.5, ry: 3.5, start_deg: 180.0, end_deg: 345.0, steps: 10.0)
+])
+
+def BasePlate = Box(
+    width: $script.total_width,
+    depth: $script.total_depth,
+    height: $script.base_thickness
+)
+
+def StrokeBead = Cylinder(
+    radius: $script.stroke_radius,
+    height: $script.extrude_height
+)
+
+def LetterMSign = coords => place_beads(
+    host: BasePlate,
+    points: letter_m_points(coords: coords),
+    bead: StrokeBead
+)
+
+export(Component(
+    solid: coords => LetterMSign(coords: coords),
+    expose: coords => {
+        origin: Vector(coords: coords, x: 0.0, y: 0.0, z: 0.0)
+    }
+))
